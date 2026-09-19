@@ -66,15 +66,25 @@ jobs:
             exit 1
           fi
 
-          if [ "$FILE_COUNT" -gt 1 ] || [ -d ./downloads/* ]; then
-            echo "Packaging multi-file torrent into single archive..."
-            (cd ./downloads && zip -q -r -0 ../TorrentBundle.zip -- .)
-            UPLOAD_FILE="TorrentBundle.zip"
-          else
-            SINGLE_FILE=$(ls -1 ./downloads | head -n 1)
-            UPLOAD_FILE="./downloads/$SINGLE_FILE"
+          # Determine the real torrent name (top-level entry in downloads/)
+          TORRENT_NAME=$(ls -1 ./downloads | head -n 1)
+          # Sanitize: keep alphanumeric, dots, hyphens, underscores, spaces
+          TORRENT_NAME=$(echo "$TORRENT_NAME" | tr -cd '[:alnum:]._-\n ')
+          # Fallback if name is empty after sanitize
+          if [ -z "$TORRENT_NAME" ]; then
+            TORRENT_NAME="download"
           fi
 
+          if [ "$FILE_COUNT" -gt 1 ] || [ -d "./downloads/$TORRENT_NAME" ]; then
+            echo "Packaging multi-file torrent into single archive..."
+            ZIP_NAME="${TORRENT_NAME}.zip"
+            (cd ./downloads && zip -q -r -0 "../${ZIP_NAME}" -- .)
+            UPLOAD_FILE="${ZIP_NAME}"
+          else
+            UPLOAD_FILE="./downloads/${TORRENT_NAME}"
+          fi
+
+          echo "Torrent name: $TORRENT_NAME"
           echo "Target upload file: $UPLOAD_FILE"
           
           # Upload to GoFile CDN (sanitize server name)
@@ -100,9 +110,10 @@ jobs:
           if [[ "$DIRECT_URL" =~ ^https:\/\/[a-zA-Z0-9\.\-\_\/\?\=\&]+$ ]]; then
             echo "=========================================================="
             echo "DIRECT_DOWNLOAD_URL: $DIRECT_URL"
+            echo "DOWNLOAD_FILENAME: $TORRENT_NAME"
             echo "=========================================================="
             echo "### 🚀 High-Speed Direct Download Link:" >> $GITHUB_STEP_SUMMARY
-            echo "[Click to Download / Stream ($DIRECT_URL)]($DIRECT_URL)" >> $GITHUB_STEP_SUMMARY
+            echo "[${TORRENT_NAME} — Click to Download ($DIRECT_URL)]($DIRECT_URL)" >> $GITHUB_STEP_SUMMARY
           else
             echo "Notice: No valid direct link generated."
           fi
@@ -110,5 +121,5 @@ jobs:
       - name: Clean Up Scratch Files
         if: always()
         run: |
-          rm -rf ./downloads TorrentBundle.zip
+          rm -rf ./downloads *.zip
           echo "Cleaned up all temporary files."

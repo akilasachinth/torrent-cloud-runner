@@ -196,9 +196,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const jobs = await Promise.all(runs.map(async (run) => {
                 let directUrl = localStorage.getItem('direct_url_' + run.id) || directLinksCache.get(run.id) || null;
+                let filename  = localStorage.getItem('filename_' + run.id) || null;
 
-                // Extract direct URL from logs if completed successfully and not cached
-                if (!directUrl && run.status === 'completed' && run.conclusion === 'success') {
+                // Extract direct URL and filename from logs if completed successfully and not cached
+                if ((!directUrl || !filename) && run.status === 'completed' && run.conclusion === 'success') {
                     try {
                         const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${run.id}/jobs`, {
                             headers: getGhHeaders()
@@ -212,17 +213,22 @@ document.addEventListener('DOMContentLoaded', () => {
                                 });
                                 if (logRes.ok) {
                                     const logText = await logRes.text();
-                                    const match = logText.match(/DIRECT_DOWNLOAD_URL:\s*(https?:\/\/[^\s\r\n]+)/);
-                                    if (match) {
-                                        directUrl = match[1];
+                                    const urlMatch  = logText.match(/DIRECT_DOWNLOAD_URL:\s*(https?:\/\/[^\s\r\n]+)/);
+                                    const nameMatch = logText.match(/DOWNLOAD_FILENAME:\s*([^\r\n]+)/);
+                                    if (urlMatch) {
+                                        directUrl = urlMatch[1];
                                         directLinksCache.set(run.id, directUrl);
                                         localStorage.setItem('direct_url_' + run.id, directUrl);
+                                    }
+                                    if (nameMatch) {
+                                        filename = nameMatch[1].trim();
+                                        localStorage.setItem('filename_' + run.id, filename);
                                     }
                                 }
                             }
                         }
                     } catch (e) {
-                        console.warn('Failed to parse direct URL for run:', run.id, e);
+                        console.warn('Failed to parse log data for run:', run.id, e);
                     }
                 }
 
@@ -231,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     status: run.status,
                     conclusion: run.conclusion,
                     createdAt: run.created_at,
-                    displayTitle: run.display_title || 'Cloud Torrent Downloader',
+                    displayTitle: filename || run.display_title || 'Cloud Torrent Downloader',
                     directUrl
                 };
             }));
