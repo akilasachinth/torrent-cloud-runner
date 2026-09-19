@@ -186,6 +186,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!token) return;
 
         try {
+            // 0. Load server-persisted downloads registry if available (cross-browser persistence)
+            let serverDb = {};
+            try {
+                const dbRes = await fetch('downloads.json?t=' + Date.now());
+                if (dbRes.ok) {
+                    serverDb = await dbRes.json();
+                }
+            } catch (_) {}
+
             const res = await fetch(`https://api.github.com/repos/${repo}/actions/runs?per_page=15`, {
                 headers: getGhHeaders()
             });
@@ -197,6 +206,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 let directUrl = localStorage.getItem('direct_url_' + run.id) || directLinksCache.get(run.id) || null;
                 let filename  = localStorage.getItem('filename_' + run.id) || null;
 
+                // Check server-persisted database first (universal cross-browser persistence)
+                if (serverDb && serverDb[run.id]) {
+                    if (!directUrl && serverDb[run.id].directUrl) directUrl = serverDb[run.id].directUrl;
+                    if (!filename  && serverDb[run.id].filename)  filename  = serverDb[run.id].filename;
+                    if (directUrl) {
+                        directLinksCache.set(run.id, directUrl);
+                        localStorage.setItem('direct_url_' + run.id, directUrl);
+                    }
+                    if (filename) {
+                        localStorage.setItem('filename_' + run.id, filename);
+                    }
+                }
+
                 // Fallback for run 35441423046 (ran before annotations update)
                 if (String(run.id) === '35441423046') {
                     if (!directUrl) directUrl = 'https://gofile.io/d/1opS1Mz5';
@@ -206,8 +228,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.setItem('filename_' + run.id, filename);
                 }
 
-                // Extract direct URL and filename if completed successfully and not cached
-                if ((!directUrl || !filename) && run.status === 'completed' && run.conclusion === 'success') {
+                let currentStep = null;
+                const needsJobsFetch = run.status === 'in_progress' || ((!directUrl || !filename) && run.status === 'completed' && run.conclusion === 'success');
+
+                if (needsJobsFetch) {
                     try {
                         const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${run.id}/jobs`, {
                             headers: getGhHeaders()
@@ -216,42 +240,55 @@ document.addEventListener('DOMContentLoaded', () => {
                             const jobsData = await jobsRes.json();
                             const runnerJob = jobsData.jobs && jobsData.jobs[0];
                             if (runnerJob) {
-                                // 1. Check annotations (zero CORS / redirect issues, fast JSON)
-                                try {
-                                    const annotRes = await fetch(`https://api.github.com/repos/${repo}/check-runs/${runnerJob.id}/annotations`, {
-                                        headers: getGhHeaders()
-                                    });
-                                    if (annotRes.ok) {
-                                        const annots = await annotRes.json();
-                                        for (const a of annots) {
-                                            if (a.title === 'DIRECT_DOWNLOAD_URL' && a.message) directUrl = a.message.trim();
-                                            if (a.title === 'DOWNLOAD_FILENAME' && a.message) filename = a.message.trim();
-                                        }
+                                // Extract current active step for live progress bar
+                                if (runnerJob.steps && runnerJob.steps.length > 0) {
+                                    const inProg = runnerJob.steps.find(s => s.status === 'in_progress');
+                                    if (inProg) {
+                                        currentStep = inProg.name;
+                                    } else {
+                                        const lastDone = runnerJob.steps.filter(s => s.status === 'completed').pop();
+                                        if (lastDone) currentStep = lastDone.name;
                                     }
-                                } catch (_) {}
+                                }
 
-                                // 2. Fallback to raw logs if annotations not yet populated
-                                if (!directUrl || !filename) {
+                                if ((!directUrl || !filename) && run.status === 'completed' && run.conclusion === 'success') {
+                                    // 1. Check annotations (zero CORS / redirect issues, fast JSON)
                                     try {
-                                        const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
+                                        const annotRes = await fetch(`https://api.github.com/repos/${repo}/check-runs/${runnerJob.id}/annotations`, {
                                             headers: getGhHeaders()
                                         });
-                                        if (logRes.ok) {
-                                            const logText = await logRes.text();
-                                            const urlMatch  = logText.match(/DIRECT_DOWNLOAD_URL:\s*(https?:\/\/[^\s\r\n]+)/);
-                                            const nameMatch = logText.match(/DOWNLOAD_FILENAME:\s*([^\r\n]+)/);
-                                            if (urlMatch && !directUrl) directUrl = urlMatch[1];
-                                            if (nameMatch && !filename) filename = nameMatch[1].trim();
+                                        if (annotRes.ok) {
+                                            const annots = await annotRes.json();
+                                            for (const a of annots) {
+                                                if (a.title === 'DIRECT_DOWNLOAD_URL' && a.message) directUrl = a.message.trim();
+                                                if (a.title === 'DOWNLOAD_FILENAME' && a.message) filename = a.message.trim();
+                                            }
                                         }
                                     } catch (_) {}
-                                }
 
-                                if (directUrl) {
-                                    directLinksCache.set(run.id, directUrl);
-                                    localStorage.setItem('direct_url_' + run.id, directUrl);
-                                }
-                                if (filename) {
-                                    localStorage.setItem('filename_' + run.id, filename);
+                                    // 2. Fallback to raw logs if annotations not yet populated
+                                    if (!directUrl || !filename) {
+                                        try {
+                                            const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
+                                                headers: getGhHeaders()
+                                            });
+                                            if (logRes.ok) {
+                                                const logText = await logRes.text();
+                                                const urlMatch  = logText.match(/DIRECT_DOWNLOAD_URL:\s*(https?:\/\/[^\s\r\n]+)/);
+                                                const nameMatch = logText.match(/DOWNLOAD_FILENAME:\s*([^\r\n]+)/);
+                                                if (urlMatch && !directUrl) directUrl = urlMatch[1];
+                                                if (nameMatch && !filename) filename = nameMatch[1].trim();
+                                            }
+                                        } catch (_) {}
+                                    }
+
+                                    if (directUrl) {
+                                        directLinksCache.set(run.id, directUrl);
+                                        localStorage.setItem('direct_url_' + run.id, directUrl);
+                                    }
+                                    if (filename) {
+                                        localStorage.setItem('filename_' + run.id, filename);
+                                    }
                                 }
                             }
                         }
@@ -266,7 +303,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     conclusion: run.conclusion,
                     createdAt: run.created_at,
                     displayTitle: filename || run.display_title || 'Cloud Torrent Downloader',
-                    directUrl
+                    directUrl,
+                    currentStep
                 };
             }));
 
@@ -336,6 +374,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Calculate progress and stage
+            let progress = 0;
+            let stageText = 'Queued';
+            let progressClass = 'queued';
+
+            if (job.status === 'queued') {
+                progress = 5;
+                stageText = '⏳ Queued on cloud runner...';
+                progressClass = 'queued';
+            } else if (job.status === 'completed') {
+                if (job.conclusion === 'success') {
+                    progress = 100;
+                    stageText = '✅ Cloud Download & Upload Complete';
+                    progressClass = 'completed';
+                } else {
+                    progress = 100;
+                    stageText = '❌ Cloud Download Failed';
+                    progressClass = 'failed';
+                }
+            } else if (isRunning) {
+                progressClass = 'in_progress';
+                const step = job.currentStep || '';
+                if (step.includes('Free Disk Space') || step.includes('Set up')) {
+                    progress = 15;
+                    stageText = '🚀 Preparing cloud runner disk...';
+                } else if (step.includes('Install Tools')) {
+                    progress = 30;
+                    stageText = '📦 Installing aria2 & download engine...';
+                } else if (step.includes('Download Torrent')) {
+                    progress = 65;
+                    stageText = '⚡ High-speed cloud torrent downloading...';
+                } else if (step.includes('Generate Direct')) {
+                    progress = 85;
+                    stageText = '☁️ Packaging archive & uploading to CDN...';
+                } else if (step.includes('Clean Up')) {
+                    progress = 95;
+                    stageText = '🧹 Finalizing download links...';
+                } else {
+                    progress = 45;
+                    stageText = '⚡ Downloading in cloud runner...';
+                }
+            }
+
             const createdDate  = new Date(job.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const safeDirectUrl = sanitizeUrl(job.directUrl);
             const safeJobId    = escapeHtml(String(job.databaseId || ''));
@@ -343,10 +424,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <div class="job-card ${isRunning ? 'is-active' : ''}">
                     <div class="job-info">
-                        <div class="job-title">${escapeHtml(job.displayTitle || 'Torrent Download Job')}</div>
+                        <div class="job-title" title="${escapeHtml(job.displayTitle || 'Torrent Download Job')}">${escapeHtml(job.displayTitle || 'Torrent Download Job')}</div>
                         <div class="job-meta">
                             <span>Started: ${createdDate}</span>
                             <span>ID: #${safeJobId}</span>
+                        </div>
+                        <div class="job-progress-wrapper">
+                            <div class="job-progress-header">
+                                <span class="job-progress-stage">${stageText}</span>
+                                <span class="job-progress-pct">${progress}%</span>
+                            </div>
+                            <div class="job-progress-track">
+                                <div class="job-progress-fill ${progressClass}" style="width: ${progress}%;"></div>
+                            </div>
                         </div>
                     </div>
                     <div class="job-status">
