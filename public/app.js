@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const DEFAULT_REPO  = 'akilasilv/torrent-cloud-runner';
+    const DEFAULT_REPO  = 'akilasachinth/torrent-cloud-runner';
     const WORKFLOW_FILE = 'download.yml';
 
     // Baked-in token — injected at build time by deploy_pages.yml from GH_TOKEN secret.
