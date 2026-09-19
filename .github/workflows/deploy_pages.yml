@@ -24,6 +24,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Inject GH_TOKEN into app.js
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          # Replace the __BAKED_TOKEN__ placeholder with the real token so new browsers
+          # work without any manual PAT entry. Token lives only in the deployed JS.
+          sed -i "s|__BAKED_TOKEN__|${GH_TOKEN}|g" public/app.js
+
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 

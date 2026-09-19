@@ -5,6 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const DEFAULT_REPO      = 'akilasilv/torrent-cloud-runner';
     const WORKFLOW_FILE     = 'download.yml';
 
+    // Baked-in token — injected at build time by deploy_pages.yml from GH_TOKEN secret.
+    // Acts as a fallback so new browsers work without manual PAT entry.
+    // (Placeholder __BAKED_TOKEN__ is replaced with real value during CI deploy.)
+    const BAKED_TOKEN = '__BAKED_TOKEN__';
+
     // DOM Elements
     const runnerStatus      = document.getElementById('runnerStatus');
     const downloadForm      = document.getElementById('downloadForm');
@@ -80,7 +85,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Helper functions for settings
     function getToken() {
-        return localStorage.getItem(STORAGE_KEY_TOKEN) || '';
+        // Prefer user-saved token in localStorage; fall back to build-time baked token
+        const stored = localStorage.getItem(STORAGE_KEY_TOKEN);
+        if (stored) return stored;
+        // BAKED_TOKEN is '__BAKED_TOKEN__' in source but replaced with real value at deploy time
+        if (BAKED_TOKEN && !BAKED_TOKEN.startsWith('__')) return BAKED_TOKEN;
+        return '';
     }
 
     function getRepo() {
@@ -508,6 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkStatus();
     loadJobs();
 
+    // Only prompt for token if neither localStorage nor the baked token is available
     if (!getToken()) {
         setTimeout(() => {
             configModal.classList.remove('hidden');
