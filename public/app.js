@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const jobsList          = document.getElementById('jobsList');
     const refreshJobsBtn    = document.getElementById('refreshJobsBtn');
     const clearCompletedBtn = document.getElementById('clearCompletedBtn');
+    const clearFailedBtn    = document.getElementById('clearFailedBtn');
 
     // Modals
     const logsModal         = document.getElementById('logsModal');
@@ -334,6 +335,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }[m]));
     }
 
+    // Job status helpers
+    function isJobFinished(job) {
+        return job.status === 'completed' || (job.status !== 'in_progress' && job.status !== 'queued');
+    }
+
+    function isJobFailed(job) {
+        return isJobFinished(job) && job.conclusion && job.conclusion !== 'success';
+    }
+
+    function isJobSuccess(job) {
+        return isJobFinished(job) && job.conclusion === 'success';
+    }
+
     // --- Render Job Cards ---
     function renderJobs(jobs) {
         const countBadge = document.getElementById('jobsCountBadge');
@@ -342,9 +356,14 @@ document.addEventListener('DOMContentLoaded', () => {
             countBadge.classList.toggle('hidden', !jobs || jobs.length === 0);
         }
 
-        const hasCompletedJobs = jobs && jobs.some(j => j.status === 'completed');
+        const hasFailedJobs  = jobs && jobs.some(isJobFailed);
+        const hasSuccessJobs = jobs && jobs.some(isJobSuccess);
+
+        if (clearFailedBtn) {
+            clearFailedBtn.classList.toggle('hidden', !hasFailedJobs);
+        }
         if (clearCompletedBtn) {
-            clearCompletedBtn.classList.toggle('hidden', !hasCompletedJobs);
+            clearCompletedBtn.classList.toggle('hidden', !hasSuccessJobs);
         }
 
         if (!jobs || jobs.length === 0) {
@@ -363,6 +382,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const isRunning = job.status === 'in_progress';
             const isQueued  = job.status === 'queued';
             if (isRunning || isQueued) hasActiveJobs = true;
+
+            const isFailed  = isJobFailed(job);
+            const isSuccess = isJobSuccess(job);
 
             let badgeClass  = 'badge-queued';
             let statusLabel = 'Queued';
@@ -458,7 +480,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="btn btn-danger btn-sm" data-action="cancel" data-id="${safeJobId}">⏹️ Cancel</button>
                         ` : ''}
                         <button class="btn btn-outline btn-sm" data-action="logs" data-id="${safeJobId}">📜 Logs</button>
-                        ${job.status === 'completed' ? `
+                        ${isFailed ? `
+                            <button class="btn btn-danger-outline btn-sm" data-action="delete" data-id="${safeJobId}" title="Clear this failed download record">🗑️ Clear Failed</button>
+                        ` : ''}
+                        ${isSuccess ? `
                             <button class="btn btn-outline btn-sm" data-action="delete" data-id="${safeJobId}" title="Clear this download record">🗑️ Clear</button>
                         ` : ''}
                     </div>
@@ -609,6 +634,56 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- Clear All Failed Jobs ---
+    window.clearAllFailed = async () => {
+        if (!confirm('Are you sure you want to clear all failed download records?')) return;
+
+        if (clearFailedBtn) {
+            clearFailedBtn.disabled = true;
+            clearFailedBtn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-label">Clearing...</span>';
+        }
+
+        try {
+            const repo = getRepo();
+            const res = await fetch(`https://api.github.com/repos/${repo}/actions/runs?per_page=30`, {
+                headers: getGhHeaders()
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const failedRuns = (data.workflow_runs || []).filter(r => 
+                    r.path && r.path.includes(WORKFLOW_FILE) && 
+                    (r.status === 'completed' || (r.status !== 'in_progress' && r.status !== 'queued')) &&
+                    r.conclusion && r.conclusion !== 'success'
+                );
+
+                if (failedRuns.length > 0) {
+                    await Promise.allSettled(failedRuns.map(async (run) => {
+                        localStorage.removeItem('direct_url_' + run.id);
+                        localStorage.removeItem('filename_' + run.id);
+                        directLinksCache.delete(run.id);
+                        directLinksCache.delete(Number(run.id));
+                        return fetch(`https://api.github.com/repos/${repo}/actions/runs/${run.id}`, {
+                            method: 'DELETE',
+                            headers: getGhHeaders()
+                        });
+                    }));
+                    showToast(`Cleared ${failedRuns.length} failed download record(s)!`, 'success');
+                } else {
+                    showToast('No failed download records found to clear.', 'info');
+                }
+            }
+            await loadJobs();
+        } catch (err) {
+            showToast('Failed to clear failed records: ' + err.message, 'error');
+        } finally {
+            if (clearFailedBtn) {
+                clearFailedBtn.disabled = false;
+                clearFailedBtn.innerHTML = '<span class="btn-icon">❌</span><span class="btn-label">Clear Failed</span>';
+            }
+        }
+    };
+
     // --- Clear All Completed Jobs ---
     window.clearAllCompleted = async () => {
         if (!confirm('Are you sure you want to clear all completed download records?')) return;
@@ -627,7 +702,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 const data = await res.json();
                 const completedRuns = (data.workflow_runs || []).filter(r => 
-                    r.path && r.path.includes(WORKFLOW_FILE) && r.status === 'completed'
+                    r.path && r.path.includes(WORKFLOW_FILE) && 
+                    (r.status === 'completed' || (r.status !== 'in_progress' && r.status !== 'queued')) &&
+                    r.conclusion === 'success'
                 );
 
                 if (completedRuns.length > 0) {
@@ -695,6 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (clearFailedBtn) clearFailedBtn.addEventListener('click', window.clearAllFailed);
     if (clearCompletedBtn) clearCompletedBtn.addEventListener('click', window.clearAllCompleted);
     if (refreshJobsBtn) refreshJobsBtn.addEventListener('click', loadJobs);
 

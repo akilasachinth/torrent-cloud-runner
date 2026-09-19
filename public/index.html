@@ -84,7 +84,11 @@
                     <h3>Recent Cloud Downloads</h3>
                     <span id="jobsCountBadge" class="count-badge hidden">0</span>
                 </div>
-                <div class="section-actions" style="display:flex;align-items:center;gap:8px;">
+                <div class="section-actions" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <button id="clearFailedBtn" class="btn btn-danger-outline btn-sm hidden" title="Clear all failed or cancelled download records">
+                        <span class="btn-icon">❌</span>
+                        <span class="btn-label">Clear Failed</span>
+                    </button>
                     <button id="clearCompletedBtn" class="btn btn-outline btn-sm hidden" title="Clear all completed download records">
                         <span class="btn-icon">🧹</span>
                         <span class="btn-label">Clear Completed</span>
