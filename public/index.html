@@ -84,10 +84,16 @@
                     <h3>Recent Cloud Downloads</h3>
                     <span id="jobsCountBadge" class="count-badge hidden">0</span>
                 </div>
-                <button id="refreshJobsBtn" class="btn btn-outline btn-sm" title="Refresh download list">
-                    <span class="btn-icon">🔄</span>
-                    <span class="btn-label">Refresh</span>
-                </button>
+                <div class="section-actions" style="display:flex;align-items:center;gap:8px;">
+                    <button id="clearCompletedBtn" class="btn btn-outline btn-sm hidden" title="Clear all completed download records">
+                        <span class="btn-icon">🧹</span>
+                        <span class="btn-label">Clear Completed</span>
+                    </button>
+                    <button id="refreshJobsBtn" class="btn btn-outline btn-sm" title="Refresh download list">
+                        <span class="btn-icon">🔄</span>
+                        <span class="btn-label">Refresh</span>
+                    </button>
+                </div>
             </div>
 
             <div id="jobsList" class="jobs-list">

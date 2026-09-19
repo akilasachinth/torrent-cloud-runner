@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const formFeedback      = document.getElementById('formFeedback');
     const jobsList          = document.getElementById('jobsList');
     const refreshJobsBtn    = document.getElementById('refreshJobsBtn');
+    const clearCompletedBtn = document.getElementById('clearCompletedBtn');
 
     // Modals
     const logsModal         = document.getElementById('logsModal');
@@ -341,6 +342,11 @@ document.addEventListener('DOMContentLoaded', () => {
             countBadge.classList.toggle('hidden', !jobs || jobs.length === 0);
         }
 
+        const hasCompletedJobs = jobs && jobs.some(j => j.status === 'completed');
+        if (clearCompletedBtn) {
+            clearCompletedBtn.classList.toggle('hidden', !hasCompletedJobs);
+        }
+
         if (!jobs || jobs.length === 0) {
             jobsList.innerHTML = `
                 <div class="empty-state">
@@ -422,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const safeJobId    = escapeHtml(String(job.databaseId || ''));
 
             return `
-                <div class="job-card ${isRunning ? 'is-active' : ''}">
+                <div id="job-${safeJobId}" class="job-card ${isRunning ? 'is-active' : ''}">
                     <div class="job-info">
                         <div class="job-title" title="${escapeHtml(job.displayTitle || 'Torrent Download Job')}">${escapeHtml(job.displayTitle || 'Torrent Download Job')}</div>
                         <div class="job-meta">
@@ -452,6 +458,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="btn btn-danger btn-sm" data-action="cancel" data-id="${safeJobId}">⏹️ Cancel</button>
                         ` : ''}
                         <button class="btn btn-outline btn-sm" data-action="logs" data-id="${safeJobId}">📜 Logs</button>
+                        ${job.status === 'completed' ? `
+                            <button class="btn btn-outline btn-sm" data-action="delete" data-id="${safeJobId}" title="Clear this download record">🗑️ Clear</button>
+                        ` : ''}
                     </div>
                 </div>
             `;
@@ -563,6 +572,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- Delete Single Job Record ---
+    window.deleteJob = async (jobId) => {
+        if (!confirm(`Clear download record #${jobId}?`)) return;
+
+        const card = document.getElementById(`job-${jobId}`);
+        if (card) {
+            card.style.opacity = '0.35';
+            card.style.pointerEvents = 'none';
+        }
+
+        try {
+            const res = await fetch(`https://api.github.com/repos/${getRepo()}/actions/runs/${jobId}`, {
+                method: 'DELETE',
+                headers: getGhHeaders()
+            });
+
+            // Purge from local storage and in-memory caches
+            localStorage.removeItem('direct_url_' + jobId);
+            localStorage.removeItem('filename_' + jobId);
+            directLinksCache.delete(jobId);
+            directLinksCache.delete(Number(jobId));
+
+            if (res.status === 204 || res.status === 404 || res.ok) {
+                showToast(`Download record #${jobId} cleared`, 'info');
+            } else {
+                showToast(`Removed from view (GitHub run status: ${res.status})`, 'info');
+            }
+            loadJobs();
+        } catch (err) {
+            showToast('Failed to delete download record: ' + err.message, 'error');
+            if (card) {
+                card.style.opacity = '1';
+                card.style.pointerEvents = 'auto';
+            }
+        }
+    };
+
+    // --- Clear All Completed Jobs ---
+    window.clearAllCompleted = async () => {
+        if (!confirm('Are you sure you want to clear all completed download records?')) return;
+
+        if (clearCompletedBtn) {
+            clearCompletedBtn.disabled = true;
+            clearCompletedBtn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-label">Clearing...</span>';
+        }
+
+        try {
+            const repo = getRepo();
+            const res = await fetch(`https://api.github.com/repos/${repo}/actions/runs?per_page=30`, {
+                headers: getGhHeaders()
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const completedRuns = (data.workflow_runs || []).filter(r => 
+                    r.path && r.path.includes(WORKFLOW_FILE) && r.status === 'completed'
+                );
+
+                if (completedRuns.length > 0) {
+                    await Promise.allSettled(completedRuns.map(async (run) => {
+                        localStorage.removeItem('direct_url_' + run.id);
+                        localStorage.removeItem('filename_' + run.id);
+                        directLinksCache.delete(run.id);
+                        directLinksCache.delete(Number(run.id));
+                        return fetch(`https://api.github.com/repos/${repo}/actions/runs/${run.id}`, {
+                            method: 'DELETE',
+                            headers: getGhHeaders()
+                        });
+                    }));
+                    showToast(`Cleared ${completedRuns.length} completed download record(s)!`, 'success');
+                } else {
+                    showToast('No completed download records found to clear.', 'info');
+                }
+            }
+            await loadJobs();
+        } catch (err) {
+            showToast('Failed to clear completed records: ' + err.message, 'error');
+        } finally {
+            if (clearCompletedBtn) {
+                clearCompletedBtn.disabled = false;
+                clearCompletedBtn.innerHTML = '<span class="btn-icon">🧹</span><span class="btn-label">Clear Completed</span>';
+            }
+        }
+    };
+
     // --- IDM & Copy Helpers ---
     window.sendToIdm = async (url) => {
         // Cloud mode: copy link so IDM browser extension captures it automatically
@@ -593,12 +687,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.copyLink(btn.dataset.url);
             } else if (action === 'cancel' && btn.dataset.id) {
                 window.cancelJob(btn.dataset.id);
+            } else if (action === 'delete' && btn.dataset.id) {
+                window.deleteJob(btn.dataset.id);
             } else if (action === 'logs' && btn.dataset.id) {
                 window.viewLogs(btn.dataset.id);
             }
         });
     }
 
+    if (clearCompletedBtn) clearCompletedBtn.addEventListener('click', window.clearAllCompleted);
     if (refreshJobsBtn) refreshJobsBtn.addEventListener('click', loadJobs);
 
     // Initial Load
