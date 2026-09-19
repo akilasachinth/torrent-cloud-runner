@@ -1,57 +1,37 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Storage Keys
     const STORAGE_KEY_TOKEN = 'cloudtorrent_gh_token';
-    const STORAGE_KEY_REPO = 'cloudtorrent_gh_repo';
-    const DEFAULT_REPO = 'akilasilv/torrent-cloud-runner';
-
-    // Environment Detection
-    const isLocalServer = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port === '5000';
+    const STORAGE_KEY_REPO  = 'cloudtorrent_gh_repo';
+    const DEFAULT_REPO      = 'akilasilv/torrent-cloud-runner';
+    const WORKFLOW_FILE     = 'download.yml';
 
     // DOM Elements
-    const runnerStatus = document.getElementById('runnerStatus');
-    const gdriveStatus = document.getElementById('gdriveStatus');
-    const downloadForm = document.getElementById('downloadForm');
-    const magnetInput = document.getElementById('magnetInput');
-    const folderInput = document.getElementById('folderInput');
-    const folderGroup = document.getElementById('folderGroup');
+    const runnerStatus      = document.getElementById('runnerStatus');
+    const downloadForm      = document.getElementById('downloadForm');
+    const magnetInput       = document.getElementById('magnetInput');
     const directLinkCheckbox = document.getElementById('directLinkCheckbox');
-    const gdriveCheckbox = document.getElementById('gdriveCheckbox');
-    const submitBtn = document.getElementById('submitBtn');
-    const pasteBtn = document.getElementById('pasteBtn');
-    const formFeedback = document.getElementById('formFeedback');
-    const jobsList = document.getElementById('jobsList');
-    const refreshJobsBtn = document.getElementById('refreshJobsBtn');
-    const restartServerBtn = document.getElementById('restartServerBtn');
+    const submitBtn         = document.getElementById('submitBtn');
+    const pasteBtn          = document.getElementById('pasteBtn');
+    const formFeedback      = document.getElementById('formFeedback');
+    const jobsList          = document.getElementById('jobsList');
+    const refreshJobsBtn    = document.getElementById('refreshJobsBtn');
 
     // Modals
-    const gdriveModal = document.getElementById('gdriveModal');
-    const openGdriveModalBtn = document.getElementById('openGdriveModalBtn');
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    const launchRcloneAuthBtn = document.getElementById('launchRcloneAuthBtn');
-    const authOutput = document.getElementById('authOutput');
-    const rcloneConfigInput = document.getElementById('rcloneConfigInput');
-    const saveConfigBtn = document.getElementById('saveConfigBtn');
+    const logsModal         = document.getElementById('logsModal');
+    const closeLogsBtn      = document.getElementById('closeLogsBtn');
+    const logsContent       = document.getElementById('logsContent');
+    const logsModalTitle    = document.getElementById('logsModalTitle');
 
-    const logsModal = document.getElementById('logsModal');
-    const closeLogsBtn = document.getElementById('closeLogsBtn');
-    const logsContent = document.getElementById('logsContent');
-    const logsModalTitle = document.getElementById('logsModalTitle');
-
-    const configModal = document.getElementById('configModal');
-    const openConfigModalBtn = document.getElementById('openConfigModalBtn');
+    const configModal       = document.getElementById('configModal');
+    const openConfigModalBtn  = document.getElementById('openConfigModalBtn');
     const closeConfigModalBtn = document.getElementById('closeConfigModalBtn');
-    const ghTokenInput = document.getElementById('ghTokenInput');
-    const ghRepoInput = document.getElementById('ghRepoInput');
-    const saveGhConfigBtn = document.getElementById('saveGhConfigBtn');
-    const clearGhConfigBtn = document.getElementById('clearGhConfigBtn');
+    const ghTokenInput      = document.getElementById('ghTokenInput');
+    const ghRepoInput       = document.getElementById('ghRepoInput');
+    const saveGhConfigBtn   = document.getElementById('saveGhConfigBtn');
+    const clearGhConfigBtn  = document.getElementById('clearGhConfigBtn');
 
     let pollInterval = null;
     const directLinksCache = new Map();
-
-    // Hide local restart button when running on GitHub Pages
-    if (!isLocalServer && restartServerBtn) {
-        restartServerBtn.style.display = 'none';
-    }
 
     // --- Toast Notification System ---
     function showToast(message, type = 'info', duration = 4000) {
@@ -63,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        
+
         let icon = 'ℹ️';
         if (type === 'success') icon = '✅';
         else if (type === 'error') icon = '❌';
@@ -123,83 +103,32 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ghRepoInput) ghRepoInput.value = getRepo();
     if (ghTokenInput) ghTokenInput.value = getToken();
 
-    // Toggle folder input visibility
-    if (gdriveCheckbox && folderGroup) {
-        gdriveCheckbox.addEventListener('change', () => {
-            folderGroup.style.display = gdriveCheckbox.checked ? 'flex' : 'none';
-        });
-    }
-
     // --- Status Check ---
     async function checkStatus() {
-        if (isLocalServer) {
-            try {
-                const res = await fetch('/api/status');
-                const data = await res.json();
-                if (data.success) {
-                    runnerStatus.className = 'status-pill online';
-                    runnerStatus.querySelector('.label').textContent = 'Cloud Runner: Online';
-                    if (data.gdriveConfigured) {
-                        gdriveStatus.className = 'status-pill online';
-                        gdriveStatus.querySelector('.label').textContent = 'GDrive: Connected';
-                    } else {
-                        gdriveStatus.className = 'status-pill warning';
-                        gdriveStatus.querySelector('.label').textContent = 'GDrive: Setup Required';
-                    }
-                } else {
-                    runnerStatus.className = 'status-pill error';
-                    runnerStatus.querySelector('.label').textContent = 'Cloud Runner: Error';
-                }
-            } catch (err) {
+        const token = getToken();
+        const repo  = getRepo();
+
+        if (!token) {
+            runnerStatus.className = 'status-pill warning';
+            runnerStatus.querySelector('.label').textContent = '🔑 Connect GitHub Token';
+            return;
+        }
+
+        try {
+            const repoRes = await fetch(`https://api.github.com/repos/${repo}`, {
+                headers: getGhHeaders()
+            });
+
+            if (repoRes.ok) {
+                runnerStatus.className = 'status-pill online';
+                runnerStatus.querySelector('.label').textContent = 'Cloud Runner: Online';
+            } else {
                 runnerStatus.className = 'status-pill error';
-                runnerStatus.querySelector('.label').textContent = 'Local Server: Offline';
+                runnerStatus.querySelector('.label').textContent = 'GitHub Auth Failed';
             }
-        } else {
-            // Cloud / GitHub Pages Mode
-            const token = getToken();
-            const repo = getRepo();
-
-            if (!token) {
-                runnerStatus.className = 'status-pill warning';
-                runnerStatus.querySelector('.label').textContent = '🔑 Connect GitHub Token';
-                gdriveStatus.className = 'status-pill warning';
-                gdriveStatus.querySelector('.label').textContent = 'GDrive: Pending Auth';
-                return;
-            }
-
-            try {
-                const repoRes = await fetch(`https://api.github.com/repos/${repo}`, {
-                    headers: getGhHeaders()
-                });
-
-                if (repoRes.ok) {
-                    runnerStatus.className = 'status-pill online';
-                    runnerStatus.querySelector('.label').textContent = 'Cloud Runner: Online (Cloud)';
-
-                    // Check GDrive secret
-                    try {
-                        const secretRes = await fetch(`https://api.github.com/repos/${repo}/actions/secrets/RCLONE_CONFIG_BASE64`, {
-                            headers: getGhHeaders()
-                        });
-                        if (secretRes.ok) {
-                            gdriveStatus.className = 'status-pill online';
-                            gdriveStatus.querySelector('.label').textContent = 'GDrive: Connected';
-                        } else {
-                            gdriveStatus.className = 'status-pill warning';
-                            gdriveStatus.querySelector('.label').textContent = 'GDrive: Setup Needed';
-                        }
-                    } catch (e) {
-                        gdriveStatus.className = 'status-pill online';
-                        gdriveStatus.querySelector('.label').textContent = 'GDrive: Connected';
-                    }
-                } else {
-                    runnerStatus.className = 'status-pill error';
-                    runnerStatus.querySelector('.label').textContent = 'GitHub Auth Failed';
-                }
-            } catch (err) {
-                runnerStatus.className = 'status-pill error';
-                runnerStatus.querySelector('.label').textContent = 'Network Error';
-            }
+        } catch (err) {
+            runnerStatus.className = 'status-pill error';
+            runnerStatus.querySelector('.label').textContent = 'Network Error';
         }
     }
 
@@ -220,7 +149,6 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const magnet = magnetInput.value.trim();
-        const folder = folderInput.value.trim() || 'General';
 
         if (!magnet) return;
 
@@ -235,161 +163,112 @@ document.addEventListener('DOMContentLoaded', () => {
         btnText.textContent = 'Sending to Cloud Runner...';
         formFeedback.className = 'feedback-msg hidden';
 
-        if (isLocalServer) {
-            try {
-                const res = await fetch('/api/download', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        magnet,
-                        folder,
-                        uploadToDirect: directLinkCheckbox ? directLinkCheckbox.checked : true,
-                        uploadToGdrive: gdriveCheckbox ? gdriveCheckbox.checked : false
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    formFeedback.textContent = data.message;
-                    formFeedback.className = 'feedback-msg success';
-                    showToast('Cloud download dispatched successfully!', 'success');
-                    magnetInput.value = '';
-                    setTimeout(loadJobs, 2500);
-                } else {
-                    const err = data.error || 'Failed to dispatch download';
-                    formFeedback.textContent = err;
-                    formFeedback.className = 'feedback-msg error';
-                    showToast(err, 'error');
-                }
-            } catch (err) {
-                formFeedback.textContent = 'Network error contacting local server.';
+        const token = getToken();
+        const repo  = getRepo();
+
+        if (!token) {
+            showToast('Please connect your GitHub Token first via GitHub Settings.', 'warning');
+            configModal.classList.remove('hidden');
+            submitBtn.disabled = false;
+            btnText.textContent = '⚡ Start Cloud Download';
+            return;
+        }
+
+        try {
+            const dispatchRes = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+                method: 'POST',
+                headers: getGhHeaders(),
+                body: JSON.stringify({
+                    ref: 'main',
+                    inputs: {
+                        magnet_url: magnet,
+                        upload_to_direct: directLinkCheckbox && directLinkCheckbox.checked ? 'true' : 'false'
+                    }
+                })
+            });
+
+            if (dispatchRes.status === 204) {
+                formFeedback.textContent = '🚀 Job dispatched directly to GitHub Cloud Runner! Downloading in cloud...';
+                formFeedback.className = 'feedback-msg success';
+                showToast('🚀 Dispatched directly to GitHub Cloud Runner!', 'success');
+                magnetInput.value = '';
+                setTimeout(loadJobs, 3000);
+            } else {
+                const errData = await dispatchRes.json().catch(() => ({}));
+                const errMsg = errData.message || `GitHub dispatch failed (${dispatchRes.status})`;
+                formFeedback.textContent = errMsg;
                 formFeedback.className = 'feedback-msg error';
-                showToast('Network error contacting server', 'error');
-            } finally {
-                submitBtn.disabled = false;
-                btnText.textContent = '⚡ Start Cloud Download';
+                showToast(errMsg, 'error');
             }
-        } else {
-            // Cloud Mode (Direct GitHub API)
-            const token = getToken();
-            const repo = getRepo();
-
-            if (!token) {
-                showToast('Please connect your GitHub Token first via GitHub Settings.', 'warning');
-                configModal.classList.remove('hidden');
-                submitBtn.disabled = false;
-                btnText.textContent = '⚡ Start Cloud Download';
-                return;
-            }
-
-            try {
-                const dispatchRes = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/download_to_gdrive.yml/dispatches`, {
-                    method: 'POST',
-                    headers: getGhHeaders(),
-                    body: JSON.stringify({
-                        ref: 'main',
-                        inputs: {
-                            magnet_url: magnet,
-                            upload_to_direct: directLinkCheckbox && directLinkCheckbox.checked ? 'true' : 'false',
-                            upload_to_gdrive: gdriveCheckbox && gdriveCheckbox.checked ? 'true' : 'false',
-                            destination_folder: folder
-                        }
-                    })
-                });
-
-                if (dispatchRes.status === 204) {
-                    formFeedback.textContent = '🚀 Job dispatched directly to GitHub Cloud Runner! Downloading in cloud...';
-                    formFeedback.className = 'feedback-msg success';
-                    showToast('🚀 Dispatched directly to GitHub Cloud Runner!', 'success');
-                    magnetInput.value = '';
-                    setTimeout(loadJobs, 3000);
-                } else {
-                    const errData = await dispatchRes.json().catch(() => ({}));
-                    const errMsg = errData.message || `GitHub dispatch failed (${dispatchRes.status})`;
-                    formFeedback.textContent = errMsg;
-                    formFeedback.className = 'feedback-msg error';
-                    showToast(errMsg, 'error');
-                }
-            } catch (err) {
-                formFeedback.textContent = 'Failed to dispatch to GitHub API: ' + err.message;
-                formFeedback.className = 'feedback-msg error';
-                showToast('Failed to dispatch: ' + err.message, 'error');
-            } finally {
-                submitBtn.disabled = false;
-                btnText.textContent = '⚡ Start Cloud Download';
-            }
+        } catch (err) {
+            formFeedback.textContent = 'Failed to dispatch to GitHub API: ' + err.message;
+            formFeedback.className = 'feedback-msg error';
+            showToast('Failed to dispatch: ' + err.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+            btnText.textContent = '⚡ Start Cloud Download';
         }
     });
 
     // --- Load Jobs ---
     async function loadJobs() {
-        if (isLocalServer) {
-            try {
-                const res = await fetch('/api/jobs');
-                const data = await res.json();
-                renderJobs(data.jobs || []);
-            } catch (err) {
-                console.error('Failed to load local jobs:', err);
-            }
-        } else {
-            // Direct GitHub API
-            const token = getToken();
-            const repo = getRepo();
-            if (!token) return;
+        const token = getToken();
+        const repo  = getRepo();
+        if (!token) return;
 
-            try {
-                const res = await fetch(`https://api.github.com/repos/${repo}/actions/runs?per_page=15`, {
-                    headers: getGhHeaders()
-                });
-                if (!res.ok) return;
-                const data = await res.json();
-                const runs = (data.workflow_runs || []).filter(r => r.path && r.path.includes('download_to_gdrive.yml'));
+        try {
+            const res = await fetch(`https://api.github.com/repos/${repo}/actions/runs?per_page=15`, {
+                headers: getGhHeaders()
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const runs = (data.workflow_runs || []).filter(r => r.path && r.path.includes(WORKFLOW_FILE));
 
-                const jobs = await Promise.all(runs.map(async (run) => {
-                    let directUrl = localStorage.getItem('direct_url_' + run.id) || directLinksCache.get(run.id) || null;
+            const jobs = await Promise.all(runs.map(async (run) => {
+                let directUrl = localStorage.getItem('direct_url_' + run.id) || directLinksCache.get(run.id) || null;
 
-                    // Extract direct URL from logs if completed successfully and not cached
-                    if (!directUrl && run.status === 'completed' && run.conclusion === 'success') {
-                        try {
-                            const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${run.id}/jobs`, {
-                                headers: getGhHeaders()
-                            });
-                            if (jobsRes.ok) {
-                                const jobsData = await jobsRes.json();
-                                const runnerJob = jobsData.jobs && jobsData.jobs[0];
-                                if (runnerJob) {
-                                    const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
-                                        headers: getGhHeaders()
-                                    });
-                                    if (logRes.ok) {
-                                        const logText = await logRes.text();
-                                        const match = logText.match(/DIRECT_DOWNLOAD_URL:\s*(https?:\/\/[^\s\r\n]+)/);
-                                        if (match) {
-                                            directUrl = match[1];
-                                            directLinksCache.set(run.id, directUrl);
-                                            localStorage.setItem('direct_url_' + run.id, directUrl);
-                                        }
+                // Extract direct URL from logs if completed successfully and not cached
+                if (!directUrl && run.status === 'completed' && run.conclusion === 'success') {
+                    try {
+                        const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${run.id}/jobs`, {
+                            headers: getGhHeaders()
+                        });
+                        if (jobsRes.ok) {
+                            const jobsData = await jobsRes.json();
+                            const runnerJob = jobsData.jobs && jobsData.jobs[0];
+                            if (runnerJob) {
+                                const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
+                                    headers: getGhHeaders()
+                                });
+                                if (logRes.ok) {
+                                    const logText = await logRes.text();
+                                    const match = logText.match(/DIRECT_DOWNLOAD_URL:\s*(https?:\/\/[^\s\r\n]+)/);
+                                    if (match) {
+                                        directUrl = match[1];
+                                        directLinksCache.set(run.id, directUrl);
+                                        localStorage.setItem('direct_url_' + run.id, directUrl);
                                     }
                                 }
                             }
-                        } catch (e) {
-                            console.warn('Failed to parse direct URL for run:', run.id, e);
                         }
+                    } catch (e) {
+                        console.warn('Failed to parse direct URL for run:', run.id, e);
                     }
+                }
 
-                    return {
-                        databaseId: run.id,
-                        status: run.status,
-                        conclusion: run.conclusion,
-                        createdAt: run.created_at,
-                        displayTitle: run.display_title || 'Cloud Torrent Downloader',
-                        directUrl
-                    };
-                }));
+                return {
+                    databaseId: run.id,
+                    status: run.status,
+                    conclusion: run.conclusion,
+                    createdAt: run.created_at,
+                    displayTitle: run.display_title || 'Cloud Torrent Downloader',
+                    directUrl
+                };
+            }));
 
-                renderJobs(jobs);
-            } catch (err) {
-                console.error('Failed to load GitHub cloud jobs:', err);
-            }
+            renderJobs(jobs);
+        } catch (err) {
+            console.error('Failed to load GitHub cloud jobs:', err);
         }
     }
 
@@ -403,6 +282,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (_) {}
         return '';
+    }
+
+    // HTML escape helper
+    function escapeHtml(str) {
+        return (str || '').replace(/[&<>"']/g, m => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+        }[m]));
     }
 
     // --- Render Job Cards ---
@@ -427,28 +313,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         jobsList.innerHTML = jobs.map(job => {
             const isRunning = job.status === 'in_progress';
-            const isQueued = job.status === 'queued';
+            const isQueued  = job.status === 'queued';
             if (isRunning || isQueued) hasActiveJobs = true;
 
-            let badgeClass = 'badge-queued';
+            let badgeClass  = 'badge-queued';
             let statusLabel = 'Queued';
 
             if (isRunning) {
-                badgeClass = 'badge-in_progress';
+                badgeClass  = 'badge-in_progress';
                 statusLabel = '⚡ Downloading in Cloud...';
             } else if (job.status === 'completed') {
                 if (job.conclusion === 'success') {
-                    badgeClass = 'badge-success';
+                    badgeClass  = 'badge-success';
                     statusLabel = job.directUrl ? '✓ Ready to Download' : '✓ Completed';
                 } else {
-                    badgeClass = 'badge-failure';
+                    badgeClass  = 'badge-failure';
                     statusLabel = '✗ Failed';
                 }
             }
 
-            const createdDate = new Date(job.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const createdDate  = new Date(job.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const safeDirectUrl = sanitizeUrl(job.directUrl);
-            const safeJobId = escapeHtml(String(job.databaseId || ''));
+            const safeJobId    = escapeHtml(String(job.databaseId || ''));
 
             return `
                 <div class="job-card ${isRunning ? 'is-active' : ''}">
@@ -472,7 +358,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="btn btn-danger btn-sm" data-action="cancel" data-id="${safeJobId}">⏹️ Cancel</button>
                         ` : ''}
                         <button class="btn btn-outline btn-sm" data-action="logs" data-id="${safeJobId}">📜 Logs</button>
-                        ${job.conclusion === 'success' ? `<a href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">📁 Open Drive</a>` : ''}
                     </div>
                 </div>
             `;
@@ -492,30 +377,19 @@ document.addEventListener('DOMContentLoaded', () => {
     window.cancelJob = async (jobId) => {
         if (!confirm(`Are you sure you want to cancel Cloud Download Job #${jobId}?`)) return;
 
-        if (isLocalServer) {
-            try {
-                const res = await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' });
-                const data = await res.json();
-                showToast(data.message || 'Job cancellation submitted.', 'info');
+        try {
+            const res = await fetch(`https://api.github.com/repos/${getRepo()}/actions/runs/${jobId}/cancel`, {
+                method: 'POST',
+                headers: getGhHeaders()
+            });
+            if (res.status === 202) {
+                showToast('Cancellation request sent to cloud runner.', 'info');
                 loadJobs();
-            } catch (err) {
-                showToast('Failed to cancel job: ' + err.message, 'error');
+            } else {
+                showToast('Cancel failed: ' + res.statusText, 'error');
             }
-        } else {
-            try {
-                const res = await fetch(`https://api.github.com/repos/${getRepo()}/actions/runs/${jobId}/cancel`, {
-                    method: 'POST',
-                    headers: getGhHeaders()
-                });
-                if (res.status === 202) {
-                    showToast('Cancellation request sent to cloud runner.', 'info');
-                    loadJobs();
-                } else {
-                    showToast('Cancel failed: ' + res.statusText, 'error');
-                }
-            } catch (err) {
-                showToast('Cancel request failed: ' + err.message, 'error');
-            }
+        } catch (err) {
+            showToast('Cancel request failed: ' + err.message, 'error');
         }
     };
 
@@ -525,64 +399,39 @@ document.addEventListener('DOMContentLoaded', () => {
         logsModalTitle.textContent = `Cloud Runner Logs (#${jobId})`;
         logsContent.textContent = 'Fetching live runner output from cloud...';
 
-        if (isLocalServer) {
-            try {
-                const res = await fetch(`/api/jobs/${jobId}/logs`);
-                const data = await res.json();
-                logsContent.textContent = data.logs || 'No logs available yet.';
+        try {
+            const repo = getRepo();
+            const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${jobId}/jobs`, {
+                headers: getGhHeaders()
+            });
+            if (!jobsRes.ok) throw new Error('Could not fetch jobs for this run');
+            const jobsData = await jobsRes.json();
+            const runnerJob = jobsData.jobs && jobsData.jobs[0];
+
+            if (!runnerJob) {
+                logsContent.textContent = 'Job has not started on cloud yet. Please check back in a few seconds.';
+                return;
+            }
+
+            const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
+                headers: getGhHeaders()
+            });
+
+            if (logRes.ok) {
+                logsContent.textContent = await logRes.text();
                 logsContent.scrollTop = logsContent.scrollHeight;
-            } catch (err) {
-                logsContent.textContent = 'Failed to load logs: ' + err.message;
+            } else {
+                logsContent.textContent = 'Logs are still streaming or not yet available.';
             }
-        } else {
-            try {
-                const repo = getRepo();
-                const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${jobId}/jobs`, {
-                    headers: getGhHeaders()
-                });
-                if (!jobsRes.ok) throw new Error('Could not fetch jobs for this run');
-                const jobsData = await jobsRes.json();
-                const runnerJob = jobsData.jobs && jobsData.jobs[0];
-
-                if (!runnerJob) {
-                    logsContent.textContent = 'Job has not started on cloud yet. Please check back in a few seconds.';
-                    return;
-                }
-
-                const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
-                    headers: getGhHeaders()
-                });
-
-                if (logRes.ok) {
-                    logsContent.textContent = await logRes.text();
-                    logsContent.scrollTop = logsContent.scrollHeight;
-                } else {
-                    logsContent.textContent = 'Logs are still streaming or not yet available.';
-                }
-            } catch (err) {
-                logsContent.textContent = 'Error fetching logs: ' + err.message;
-            }
+        } catch (err) {
+            logsContent.textContent = 'Error fetching logs: ' + err.message;
         }
     };
 
     // --- IDM & Copy Helpers ---
     window.sendToIdm = async (url) => {
-        if (isLocalServer) {
-            try {
-                const res = await fetch('/api/send-to-idm', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
-                });
-                const data = await res.json();
-                if (!data.success) showToast('IDM Error: ' + data.error, 'error');
-            } catch (err) {
-                window.copyLink(url);
-            }
-        } else {
-            // Cloud mode: copy link and notify
-            await window.copyLink(url);
-        }
+        // Cloud mode: copy link so IDM browser extension captures it automatically
+        await window.copyLink(url);
     };
 
     window.copyLink = async (url) => {
@@ -594,20 +443,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    function escapeHtml(str) {
-        return (str || '').replace(/[&<>"']/g, m => ({
-            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-        }[m]));
-    }
-
     // Modal Events
     if (closeLogsBtn) closeLogsBtn.addEventListener('click', () => logsModal.classList.add('hidden'));
-    if (openGdriveModalBtn) openGdriveModalBtn.addEventListener('click', () => gdriveModal.classList.remove('hidden'));
-    if (closeModalBtn) closeModalBtn.addEventListener('click', () => gdriveModal.classList.add('hidden'));
 
     if (openConfigModalBtn) openConfigModalBtn.addEventListener('click', () => {
         ghTokenInput.value = getToken();
-        ghRepoInput.value = getRepo();
+        ghRepoInput.value  = getRepo();
         configModal.classList.remove('hidden');
     });
 
@@ -616,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveGhConfigBtn) {
         saveGhConfigBtn.addEventListener('click', () => {
             const token = ghTokenInput.value.trim();
-            const repo = ghRepoInput.value.trim() || DEFAULT_REPO;
+            const repo  = ghRepoInput.value.trim() || DEFAULT_REPO;
 
             if (!token) {
                 showToast('Please enter a valid GitHub token.', 'warning');
@@ -661,41 +502,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // GDrive Config Modal Handlers
-    if (saveConfigBtn) {
-        saveConfigBtn.addEventListener('click', () => {
-            const conf = rcloneConfigInput ? rcloneConfigInput.value.trim() : '';
-            if (!conf) {
-                showToast('Please paste your Rclone configuration block first.', 'warning');
-                return;
-            }
-            try {
-                const b64 = btoa(conf);
-                navigator.clipboard.writeText(b64).catch(() => {});
-                showToast('✅ Encoded config copied! Paste into GitHub Secrets as RCLONE_CONFIG_BASE64.', 'success', 6000);
-            } catch (e) {
-                showToast('Failed to encode config: ' + e.message, 'error');
-            }
-        });
-    }
-
-    if (launchRcloneAuthBtn) {
-        launchRcloneAuthBtn.addEventListener('click', () => {
-            if (authOutput) {
-                authOutput.classList.remove('hidden');
-                authOutput.textContent = 'ℹ️ Note: Your Google Drive secret (RCLONE_CONFIG_BASE64) is already active in GitHub Secrets! If you wish to replace it, authorize using rclone on your local machine and paste the output into Option 2.';
-            }
-            showToast('Google Drive secret is already configured in GitHub Secrets.', 'info');
-        });
-    }
-
     if (refreshJobsBtn) refreshJobsBtn.addEventListener('click', loadJobs);
 
     // Initial Load & Auth prompt
     checkStatus();
     loadJobs();
 
-    if (!isLocalServer && !getToken()) {
+    if (!getToken()) {
         setTimeout(() => {
             configModal.classList.remove('hidden');
         }, 800);

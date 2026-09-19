@@ -7,21 +7,6 @@ on:
         description: 'Magnet URL or Torrent Link'
         required: true
         type: string
-      upload_to_direct:
-        description: 'Generate high-speed direct download link (CDN)'
-        required: false
-        default: 'true'
-        type: string
-      upload_to_gdrive:
-        description: 'Upload to Google Drive'
-        required: false
-        default: 'false'
-        type: string
-      destination_folder:
-        description: 'Google Drive Destination Subfolder (inside /Torrents)'
-        required: false
-        default: 'General'
-        type: string
 
 permissions:
   contents: read
@@ -42,8 +27,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y aria2 curl jq zip
-          sudo -v ; curl https://rclone.org/install.sh | sudo bash
-          rclone version
           aria2c --version
 
       - name: Download Torrent via Aria2
@@ -76,7 +59,6 @@ jobs:
           ls -la ./downloads
 
       - name: Generate Direct High-Speed Download Link
-        if: ${{ inputs.upload_to_direct == 'true' || inputs.upload_to_direct == true }}
         run: |
           FILE_COUNT=$(ls -1 ./downloads | wc -l)
           if [ "$FILE_COUNT" -eq 0 ]; then
@@ -125,42 +107,8 @@ jobs:
             echo "Notice: No valid direct link generated."
           fi
 
-      - name: Upload to Google Drive (Optional)
-        if: ${{ inputs.upload_to_gdrive == 'true' || inputs.upload_to_gdrive == true }}
-        env:
-          RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONFIG_BASE64 }}
-          INPUT_DEST_FOLDER: ${{ inputs.destination_folder }}
-        run: |
-          if [ -z "$RCLONE_CONF_BASE64" ]; then
-            echo "ERROR: RCLONE_CONFIG_BASE64 secret is missing in GitHub repository!"
-            echo "Please configure Google Drive in your CloudTorrent dashboard."
-            exit 1
-          fi
-
-          mkdir -p ~/.config/rclone
-          echo "$RCLONE_CONF_BASE64" | base64 --decode > ~/.config/rclone/rclone.conf
-
-          # Sanitize folder name
-          DEST_FOLDER=$(echo "${INPUT_DEST_FOLDER:-General}" | tr -cd '[:alnum:] _-')
-          if [ -z "$DEST_FOLDER" ]; then
-            DEST_FOLDER="General"
-          fi
-
-          echo "Uploading to Google Drive at: Torrents/$DEST_FOLDER"
-          rclone copy ./downloads "gdrive:Torrents/$DEST_FOLDER" \
-            --transfers=4 \
-            --drive-chunk-size=64M \
-            --stats=10s \
-            --stats-one-line \
-            -v
-
-          echo "Google Drive transfer successfully completed!"
-          echo "### 📁 Google Drive:" >> $GITHUB_STEP_SUMMARY
-          echo "Files uploaded to \`Torrents/$DEST_FOLDER\`" >> $GITHUB_STEP_SUMMARY
-
       - name: Clean Up Scratch Files
         if: always()
         run: |
-          shred -u ~/.config/rclone/rclone.conf 2>/dev/null || rm -f ~/.config/rclone/rclone.conf
           rm -rf ./downloads TorrentBundle.zip
-          echo "Cleaned up and securely purged all temporary files."
+          echo "Cleaned up all temporary files."

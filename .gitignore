@@ -1,6 +1,37 @@
 # Environment & Secrets
 .env
 .env.local
+.env.example
+
+# Local Server (no longer part of project — hosted-only)
+server.js
+supervisor.js
+package.json
+package-lock.json
+
+# Startup & Windows Scripts (local-only)
+start.bat
+start-bg.bat
+start-silent.vbs
+stop.bat
+install-startup.ps1
+uninstall-startup.ps1
+setup-service.ps1
+setup-rclone.ps1
+register-run.reg
+switch-github.bat
+
+# GDrive / Rclone (removed)
+auth-gdrive.bat
+auth-gdrive.ps1
+
+# Docker (local-only)
+Dockerfile
+docker-compose.yml
+docker-start.bat
+
+# Old workflow (renamed to download.yml)
+.github/workflows/download_to_gdrive.yml
 
 # Logs
 *.log

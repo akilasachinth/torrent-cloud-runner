@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.github.com http://localhost:5000 http://127.0.0.1:5000; img-src 'self' data: https:; object-src 'none'; base-uri 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.github.com; img-src 'self' data: https:; object-src 'none'; base-uri 'self';">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>CloudTorrent — High-Speed Cloud Downloader</title>
@@ -23,7 +23,7 @@
                 <div class="logo-icon" aria-hidden="true">⚡</div>
                 <div class="brand-text">
                     <h1>CloudTorrent</h1>
-                    <span class="subtitle">Cloud Downloader & GDrive</span>
+                    <span class="subtitle">Cloud Downloader</span>
                 </div>
             </div>
 
@@ -33,24 +33,12 @@
                         <span class="dot"></span>
                         <span class="label">Checking Cloud...</span>
                     </div>
-                    <div id="gdriveStatus" class="status-pill checking" title="Google Drive Integration">
-                        <span class="dot"></span>
-                        <span class="label">Checking GDrive...</span>
-                    </div>
                 </div>
 
                 <div class="action-buttons">
-                    <button id="openConfigModalBtn" class="btn btn-outline btn-sm" title="Configure GitHub Token & Repo">
+                    <button id="openConfigModalBtn" class="btn btn-outline btn-sm" title="Configure GitHub Token &amp; Repo">
                         <span class="btn-icon">🔑</span>
                         <span class="btn-label">GitHub</span>
-                    </button>
-                    <button id="openGdriveModalBtn" class="btn btn-outline btn-sm" title="Configure Google Drive Upload">
-                        <span class="btn-icon">⚙️</span>
-                        <span class="btn-label">GDrive</span>
-                    </button>
-                    <button id="restartServerBtn" class="btn btn-outline btn-sm" title="Restart Local Background Server">
-                        <span class="btn-icon">🔄</span>
-                        <span class="btn-label">Restart</span>
                     </button>
                 </div>
             </div>
@@ -61,7 +49,7 @@
             <div class="badge-icon">🛡️</div>
             <div class="badge-content">
                 <strong>Zero Local Bandwidth Used</strong>
-                <span>Torrent downloading and Drive syncing execute 100% on cloud runners. Your home and mobile data are untouched.</span>
+                <span>Torrent downloading executes 100% on cloud runners. Your home and mobile data are untouched.</span>
             </div>
         </div>
 
@@ -88,20 +76,11 @@
                     <label class="checkbox-pill">
                         <input type="checkbox" id="directLinkCheckbox" checked>
                         <span class="checkbox-indicator"></span>
-                        <span class="checkbox-text">🚀 <strong>High-Speed CDN Link</strong> (Direct stream & IDM auto-resume)</span>
-                    </label>
-                    <label class="checkbox-pill">
-                        <input type="checkbox" id="gdriveCheckbox">
-                        <span class="checkbox-indicator"></span>
-                        <span class="checkbox-text">📁 <strong>Save to Google Drive</strong> (Optional)</span>
+                        <span class="checkbox-text">🚀 <strong>High-Speed CDN Link</strong> (Direct stream &amp; IDM auto-resume)</span>
                     </label>
                 </div>
 
                 <div class="form-row">
-                    <div class="folder-group" id="folderGroup" style="display: none;">
-                        <label for="folderInput">GDrive Subfolder (Inside /Torrents):</label>
-                        <input type="text" id="folderInput" value="General" placeholder="e.g. Movies, Series, Software">
-                    </div>
                     <button type="submit" id="submitBtn" class="btn btn-primary btn-submit">
                         <span class="btn-text">⚡ Start Cloud Download</span>
                         <span class="btn-loader hidden"></span>
@@ -132,35 +111,6 @@
                 </div>
             </div>
         </section>
-
-        <!-- Google Drive Config Modal -->
-        <div id="gdriveModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="gdriveModalTitle">
-            <div class="modal-card">
-                <div class="modal-header">
-                    <h3 id="gdriveModalTitle">⚙️ Google Drive Configuration</h3>
-                    <button id="closeModalBtn" class="close-btn" aria-label="Close modal">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p class="modal-desc">
-                        To upload files directly to your Google Drive, your cloud runner requires an encrypted Rclone token saved in your GitHub Secrets.
-                    </p>
-
-                    <div class="setup-tabs">
-                        <h4>Option 1: Quick Auto-Authorize (Local Desktop)</h4>
-                        <p class="step-desc">If running locally, click below to log into your Google Account in your browser:</p>
-                        <button id="launchRcloneAuthBtn" class="btn btn-secondary btn-block">🔑 Generate GDrive Token</button>
-                        <div id="authOutput" class="auth-output hidden"></div>
-
-                        <hr class="modal-divider">
-
-                        <h4>Option 2: Paste Existing Rclone Config</h4>
-                        <p class="step-desc">If running in cloud mode or you already have an Rclone token, paste your <code>[gdrive]</code> block below:</p>
-                        <textarea id="rcloneConfigInput" rows="6" placeholder="[gdrive]&#10;type = drive&#10;scope = drive&#10;token = {&quot;access_token&quot;:&quot;...&quot;,&quot;token_type&quot;:&quot;Bearer&quot;,&quot;refresh_token&quot;:&quot;...&quot;}"></textarea>
-                        <button id="saveConfigBtn" class="btn btn-primary btn-block">💾 Save to Cloud Runner Secrets</button>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <!-- Logs Modal -->
         <div id="logsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="logsModalTitle">
@@ -196,7 +146,7 @@
                         <input type="text" id="ghRepoInput" value="akilasilv/torrent-cloud-runner" placeholder="username/repository">
                     </div>
                     <div style="display: flex; gap: 10px; margin-top: 14px;">
-                        <button id="saveGhConfigBtn" class="btn btn-primary" style="flex: 2;">💾 Save & Connect</button>
+                        <button id="saveGhConfigBtn" class="btn btn-primary" style="flex: 2;">💾 Save &amp; Connect</button>
                         <button id="clearGhConfigBtn" class="btn btn-danger" style="flex: 1;" type="button" title="Purge token from browser storage">🗑️ Disconnect</button>
                     </div>
                 </div>
