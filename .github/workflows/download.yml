@@ -43,9 +43,9 @@ jobs:
             exit 1
           fi
           
-          # Fetch top-tier active BitTorrent trackers to maximize peer and seeder discovery
+          # Fetch comprehensive active BitTorrent trackers to maximize peer and seeder discovery
           echo "Fetching active BitTorrent trackers..."
-          TRACKERS=$(curl -sSL --connect-timeout 5 https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt | awk NF | paste -sd, - || true)
+          TRACKERS=$(curl -sSL --connect-timeout 5 https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_all.txt | awk NF | paste -sd, - || true)
           TRACKER_FLAG=""
           if [ -n "$TRACKERS" ]; then
             echo "Successfully loaded public trackers into aria2 engine."
@@ -56,20 +56,27 @@ jobs:
             --allow-overwrite=true \
             --auto-file-renaming=false \
             --seed-time=0 \
-            --summary-interval=5 \
+            --summary-interval=3 \
             --file-allocation=none \
             --disk-cache=128M \
+            --peer-id-prefix="-TR3000-" \
+            --user-agent="Transmission/3.00" \
             --enable-dht=true \
-            --enable-dht6=true \
+            --enable-dht6=false \
+            --dht-file-path="" \
+            --dht-file-path6="" \
+            --dht-entry-point="router.bittorrent.com:6881" \
+            --dht-entry-point="router.utorrent.com:6881" \
+            --dht-entry-point="dht.transmissionbt.com:6881" \
             --enable-peer-exchange=true \
             --bt-enable-lpd=true \
-            --bt-max-peers=200 \
-            --bt-request-peer-speed-limit=100M \
+            --bt-max-peers=150 \
+            --bt-tracker-interval=15 \
             --bt-tracker-connect-timeout=5 \
             --bt-tracker-timeout=5 \
+            --bt-min-crypto-level=plain \
+            --bt-require-crypto=false \
             --max-connection-per-server=16 \
-            --split=16 \
-            --min-split-size=1M \
             $TRACKER_FLAG \
             --dir="./downloads" \
             "$MAGNET_URL"
