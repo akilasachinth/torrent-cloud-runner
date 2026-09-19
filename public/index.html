@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudTorrent ➔ Google Drive</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="navbar">
+            <div class="brand">
+                <div class="logo-icon">⚡</div>
+                <div class="brand-text">
+                    <h1>CloudTorrent</h1>
+                    <span class="subtitle">Direct-to-Google Drive</span>
+                </div>
+            </div>
+            <div class="header-status">
+                <div id="runnerStatus" class="status-pill checking">
+                    <span class="dot"></span>
+                    <span class="label">Checking Cloud Runner...</span>
+                </div>
+                <div id="gdriveStatus" class="status-pill checking">
+                    <span class="dot"></span>
+                    <span class="label">Checking GDrive...</span>
+                </div>
+                <button id="openGdriveModalBtn" class="btn btn-outline btn-sm">⚙️ GDrive Config</button>
+                <button id="restartServerBtn" class="btn btn-outline btn-sm" title="Restart Background Server">🔄 Restart</button>
+            </div>
+        </header>
+
+        <!-- Zero Network Notice -->
+        <div class="network-badge">
+            <span class="shield-icon">🛡️</span>
+            <span><strong>Zero Local Network Usage:</strong> Torrent downloading and Drive uploading execute entirely on cloud servers. Your home/mobile data is untouched.</span>
+        </div>
+
+        <!-- Download Input Section -->
+        <section class="downloader-card">
+            <h2>Add New Magnet / Torrent</h2>
+            <form id="downloadForm">
+                <div class="input-group">
+                    <div class="input-wrapper">
+                        <span class="input-icon">🧲</span>
+                        <input type="text" id="magnetInput" placeholder="Paste magnet link (magnet:?xt=urn:btih:...)" required autocomplete="off">
+                        <button type="button" id="pasteBtn" class="paste-btn">Paste</button>
+                    </div>
+                </div>
+
+                <div class="options-row">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="directLinkCheckbox" checked>
+                        <span>🚀 <strong>Direct Download Link</strong> (High-speed CDN for direct download / stream)</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="gdriveCheckbox">
+                        <span>📁 <strong>Save to Google Drive</strong> (Optional)</span>
+                    </label>
+                </div>
+
+                <div class="form-row">
+                    <div class="folder-group" id="folderGroup" style="display: none;">
+                        <label for="folderInput">Google Drive Destination Subfolder:</label>
+                        <input type="text" id="folderInput" value="General" placeholder="e.g. Movies, Series, Software">
+                    </div>
+                    <button type="submit" id="submitBtn" class="btn btn-primary">
+                        <span class="btn-text">⚡ Start Cloud Download</span>
+                        <span class="btn-loader hidden"></span>
+                    </button>
+                </div>
+            </form>
+            <div id="formFeedback" class="feedback-msg hidden"></div>
+        </section>
+
+        <!-- Jobs / Downloads List -->
+        <section class="jobs-section">
+            <div class="section-header">
+                <h3>Recent Cloud Downloads</h3>
+                <button id="refreshJobsBtn" class="btn btn-icon" title="Refresh">🔄 Refresh</button>
+            </div>
+
+            <div id="jobsList" class="jobs-list">
+                <div class="empty-state">
+                    <div class="empty-icon">☁️</div>
+                    <p>No active downloads right now. Paste a magnet link above to start!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Google Drive Config Modal -->
+        <div id="gdriveModal" class="modal-backdrop hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>⚙️ Connect Google Drive</h3>
+                    <button id="closeModalBtn" class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-desc">
+                        To upload files straight into your Google Drive, your cloud runner uses an Rclone configuration.
+                    </p>
+
+                    <div class="setup-tabs">
+                        <h4>Option 1: Quick Auto-Authorize (Recommended)</h4>
+                        <p class="step-desc">Click the button below to generate your Google Drive token in your browser:</p>
+                        <button id="launchRcloneAuthBtn" class="btn btn-secondary">🔑 Generate GDrive Token</button>
+                        <div id="authOutput" class="auth-output hidden"></div>
+
+                        <hr class="modal-divider">
+
+                        <h4>Option 2: Paste Existing Rclone Config</h4>
+                        <p class="step-desc">If you already have an rclone Google Drive configuration, paste the <code>[gdrive]</code> block below:</p>
+                        <textarea id="rcloneConfigInput" rows="6" placeholder="[gdrive]&#10;type = drive&#10;scope = drive&#10;token = {&quot;access_token&quot;:&quot;...&quot;,&quot;token_type&quot;:&quot;Bearer&quot;,&quot;refresh_token&quot;:&quot;...&quot;}"></textarea>
+                        <button id="saveConfigBtn" class="btn btn-primary btn-block">Save GDrive to Cloud Runner</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Modal -->
+        <div id="logsModal" class="modal-backdrop hidden">
+            <div class="modal-card modal-lg">
+                <div class="modal-header">
+                    <h3 id="logsModalTitle">Cloud Runner Logs</h3>
+                    <button id="closeLogsBtn" class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <pre id="logsContent" class="logs-console">Loading cloud logs...</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

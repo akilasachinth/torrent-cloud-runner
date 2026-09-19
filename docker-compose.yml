@@ -1,0 +1,13 @@
+services:
+  cloud-torrent:
+    build: .
+    container_name: cloud-torrent-gdrive
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - REPO=${REPO}
+      - GH_TOKEN=${GH_TOKEN}
+    env_file:
+      - .env
