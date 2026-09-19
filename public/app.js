@@ -197,7 +197,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 let directUrl = localStorage.getItem('direct_url_' + run.id) || directLinksCache.get(run.id) || null;
                 let filename  = localStorage.getItem('filename_' + run.id) || null;
 
-                // Extract direct URL and filename from logs if completed successfully and not cached
+                // Fallback for run 35441423046 (ran before annotations update)
+                if (String(run.id) === '35441423046') {
+                    if (!directUrl) directUrl = 'https://gofile.io/d/1opS1Mz5';
+                    if (!filename)  filename  = 'Harry Potter And The Deathly Hallows Part 1 2010 REPACK 720p BluRay YTS.MX.zip';
+                    directLinksCache.set(run.id, directUrl);
+                    localStorage.setItem('direct_url_' + run.id, directUrl);
+                    localStorage.setItem('filename_' + run.id, filename);
+                }
+
+                // Extract direct URL and filename if completed successfully and not cached
                 if ((!directUrl || !filename) && run.status === 'completed' && run.conclusion === 'success') {
                     try {
                         const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${run.id}/jobs`, {
@@ -207,27 +216,47 @@ document.addEventListener('DOMContentLoaded', () => {
                             const jobsData = await jobsRes.json();
                             const runnerJob = jobsData.jobs && jobsData.jobs[0];
                             if (runnerJob) {
-                                const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
-                                    headers: getGhHeaders()
-                                });
-                                if (logRes.ok) {
-                                    const logText = await logRes.text();
-                                    const urlMatch  = logText.match(/DIRECT_DOWNLOAD_URL:\s*(https?:\/\/[^\s\r\n]+)/);
-                                    const nameMatch = logText.match(/DOWNLOAD_FILENAME:\s*([^\r\n]+)/);
-                                    if (urlMatch) {
-                                        directUrl = urlMatch[1];
-                                        directLinksCache.set(run.id, directUrl);
-                                        localStorage.setItem('direct_url_' + run.id, directUrl);
+                                // 1. Check annotations (zero CORS / redirect issues, fast JSON)
+                                try {
+                                    const annotRes = await fetch(`https://api.github.com/repos/${repo}/check-runs/${runnerJob.id}/annotations`, {
+                                        headers: getGhHeaders()
+                                    });
+                                    if (annotRes.ok) {
+                                        const annots = await annotRes.json();
+                                        for (const a of annots) {
+                                            if (a.title === 'DIRECT_DOWNLOAD_URL' && a.message) directUrl = a.message.trim();
+                                            if (a.title === 'DOWNLOAD_FILENAME' && a.message) filename = a.message.trim();
+                                        }
                                     }
-                                    if (nameMatch) {
-                                        filename = nameMatch[1].trim();
-                                        localStorage.setItem('filename_' + run.id, filename);
-                                    }
+                                } catch (_) {}
+
+                                // 2. Fallback to raw logs if annotations not yet populated
+                                if (!directUrl || !filename) {
+                                    try {
+                                        const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
+                                            headers: getGhHeaders()
+                                        });
+                                        if (logRes.ok) {
+                                            const logText = await logRes.text();
+                                            const urlMatch  = logText.match(/DIRECT_DOWNLOAD_URL:\s*(https?:\/\/[^\s\r\n]+)/);
+                                            const nameMatch = logText.match(/DOWNLOAD_FILENAME:\s*([^\r\n]+)/);
+                                            if (urlMatch && !directUrl) directUrl = urlMatch[1];
+                                            if (nameMatch && !filename) filename = nameMatch[1].trim();
+                                        }
+                                    } catch (_) {}
+                                }
+
+                                if (directUrl) {
+                                    directLinksCache.set(run.id, directUrl);
+                                    localStorage.setItem('direct_url_' + run.id, directUrl);
+                                }
+                                if (filename) {
+                                    localStorage.setItem('filename_' + run.id, filename);
                                 }
                             }
                         }
                     } catch (e) {
-                        console.warn('Failed to parse log data for run:', run.id, e);
+                        console.warn('Failed to fetch job metadata for run:', run.id, e);
                     }
                 }
 
@@ -372,6 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.viewLogs = async (jobId) => {
         logsModal.classList.remove('hidden');
         logsModalTitle.textContent = `Cloud Runner Logs (#${jobId})`;
+        const ghRunUrl = `https://github.com/${getRepo()}/actions/runs/${jobId}`;
         logsContent.textContent = 'Fetching live runner output from cloud...';
 
         try {
@@ -388,18 +418,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
-                headers: getGhHeaders()
-            });
+            // Try to get direct download URL and filename from annotations or cache
+            let directUrl = localStorage.getItem('direct_url_' + jobId) || (String(jobId) === '35441423046' ? 'https://gofile.io/d/1opS1Mz5' : null);
+            let filename  = localStorage.getItem('filename_' + jobId)   || (String(jobId) === '35441423046' ? 'Harry Potter And The Deathly Hallows Part 1 2010 REPACK 720p BluRay YTS.MX.zip' : null);
 
-            if (logRes.ok) {
-                logsContent.textContent = await logRes.text();
+            try {
+                const annotRes = await fetch(`https://api.github.com/repos/${repo}/check-runs/${runnerJob.id}/annotations`, {
+                    headers: getGhHeaders()
+                });
+                if (annotRes.ok) {
+                    const annots = await annotRes.json();
+                    for (const a of annots) {
+                        if (a.title === 'DIRECT_DOWNLOAD_URL' && a.message) directUrl = a.message.trim();
+                        if (a.title === 'DOWNLOAD_FILENAME' && a.message) filename = a.message.trim();
+                    }
+                }
+            } catch (_) {}
+
+            // Try fetching raw log text
+            let logText = null;
+            try {
+                const logRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${runnerJob.id}/logs`, {
+                    headers: getGhHeaders()
+                });
+                if (logRes.ok) {
+                    logText = await logRes.text();
+                }
+            } catch (_) {
+                // Cross-origin redirect to Azure storage blocked by browser CORS policy
+            }
+
+            if (logText) {
+                logsContent.textContent = logText;
                 logsContent.scrollTop = logsContent.scrollHeight;
             } else {
-                logsContent.textContent = 'Logs are still streaming or not yet available.';
+                let summaryHtml = `
+                    <div style="font-family: inherit; line-height: 1.8; padding: 4px;">
+                        <p><strong>Run Status:</strong> ${escapeHtml(runnerJob.status)} (${escapeHtml(runnerJob.conclusion || 'running')})</p>
+                        ${filename ? `<p><strong>File Name:</strong> ${escapeHtml(filename)}</p>` : ''}
+                        ${directUrl ? `<p><strong>Direct Link:</strong> <a href="${escapeHtml(directUrl)}" target="_blank" rel="noopener noreferrer" style="color:#22c55e;font-weight:600;word-break:break-all;">${escapeHtml(directUrl)}</a></p>` : ''}
+                        <hr style="border:0;border-top:1px solid rgba(255,255,255,0.15);margin:14px 0;">
+                        <p style="color:#94a3b8;font-size:0.9em;margin-bottom:12px;">
+                            Raw streaming runner output is hosted in GitHub Actions cloud storage. Due to browser cross-origin policy, you can view the complete live console log directly on GitHub:
+                        </p>
+                        <a href="${escapeHtml(ghRunUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="display:inline-block;">
+                            🚀 Open Live Console Logs on GitHub Actions ↗
+                        </a>
+                    </div>
+                `;
+                logsContent.innerHTML = summaryHtml;
             }
         } catch (err) {
-            logsContent.textContent = 'Error fetching logs: ' + err.message;
+            logsContent.textContent = 'Error: ' + err.message;
         }
     };
 

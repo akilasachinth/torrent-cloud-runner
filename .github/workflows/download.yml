@@ -114,6 +114,8 @@ jobs:
             echo "DIRECT_DOWNLOAD_URL: $DIRECT_URL"
             echo "DOWNLOAD_FILENAME: $TORRENT_NAME"
             echo "=========================================================="
+            echo "::notice title=DIRECT_DOWNLOAD_URL::$DIRECT_URL"
+            echo "::notice title=DOWNLOAD_FILENAME::$TORRENT_NAME"
             echo "### 🚀 High-Speed Direct Download Link:" >> $GITHUB_STEP_SUMMARY
             echo "[${TORRENT_NAME} — Click to Download ($DIRECT_URL)]($DIRECT_URL)" >> $GITHUB_STEP_SUMMARY
           else
