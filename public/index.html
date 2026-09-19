@@ -35,12 +35,6 @@
                     </div>
                 </div>
 
-                <div class="action-buttons">
-                    <button id="openConfigModalBtn" class="btn btn-outline btn-sm" title="Configure GitHub Token &amp; Repo">
-                        <span class="btn-icon">🔑</span>
-                        <span class="btn-label">GitHub</span>
-                    </button>
-                </div>
             </div>
         </header>
 
@@ -125,34 +119,8 @@
             </div>
         </div>
 
-        <!-- GitHub Config Modal -->
-        <div id="configModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="configModalTitle">
-            <div class="modal-card">
-                <div class="modal-header">
-                    <h3 id="configModalTitle">🔑 GitHub Cloud Connection</h3>
-                    <button id="closeConfigModalBtn" class="close-btn" aria-label="Close modal">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p class="modal-desc">
-                        Connect this web dashboard directly to your GitHub Cloud Runner. Your token is stored <strong>only in this browser's private local storage</strong> and is never uploaded to any server.
-                    </p>
-                    <div class="input-field-group">
-                        <label for="ghTokenInput">GitHub Personal Access Token (PAT):</label>
-                        <input type="password" id="ghTokenInput" placeholder="ghp_... or gho_..." autocomplete="off">
-                        <small class="field-hint">Requires <code>repo</code> or <code>workflow</code> permission scope.</small>
-                    </div>
-                    <div class="input-field-group">
-                        <label for="ghRepoInput">Repository (Owner/Repo):</label>
-                        <input type="text" id="ghRepoInput" value="akilasilv/torrent-cloud-runner" placeholder="username/repository">
-                    </div>
-                    <div style="display: flex; gap: 10px; margin-top: 14px;">
-                        <button id="saveGhConfigBtn" class="btn btn-primary" style="flex: 2;">💾 Save &amp; Connect</button>
-                        <button id="clearGhConfigBtn" class="btn btn-danger" style="flex: 1;" type="button" title="Purge token from browser storage">🗑️ Disconnect</button>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
+
 
     <script src="app.js"></script>
 </body>

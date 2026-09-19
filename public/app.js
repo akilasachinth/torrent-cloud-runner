@@ -1,9 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Storage Keys
-    const STORAGE_KEY_TOKEN = 'cloudtorrent_gh_token';
-    const STORAGE_KEY_REPO  = 'cloudtorrent_gh_repo';
-    const DEFAULT_REPO      = 'akilasilv/torrent-cloud-runner';
-    const WORKFLOW_FILE     = 'download.yml';
+    const DEFAULT_REPO  = 'akilasilv/torrent-cloud-runner';
+    const WORKFLOW_FILE = 'download.yml';
 
     // Baked-in token — injected at build time by deploy_pages.yml from GH_TOKEN secret.
     // Acts as a fallback so new browsers work without manual PAT entry.
@@ -26,14 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeLogsBtn      = document.getElementById('closeLogsBtn');
     const logsContent       = document.getElementById('logsContent');
     const logsModalTitle    = document.getElementById('logsModalTitle');
-
-    const configModal       = document.getElementById('configModal');
-    const openConfigModalBtn  = document.getElementById('openConfigModalBtn');
-    const closeConfigModalBtn = document.getElementById('closeConfigModalBtn');
-    const ghTokenInput      = document.getElementById('ghTokenInput');
-    const ghRepoInput       = document.getElementById('ghRepoInput');
-    const saveGhConfigBtn   = document.getElementById('saveGhConfigBtn');
-    const clearGhConfigBtn  = document.getElementById('clearGhConfigBtn');
 
     let pollInterval = null;
     const directLinksCache = new Map();
@@ -85,16 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Helper functions for settings
     function getToken() {
-        // Prefer user-saved token in localStorage; fall back to build-time baked token
-        const stored = localStorage.getItem(STORAGE_KEY_TOKEN);
-        if (stored) return stored;
-        // BAKED_TOKEN is '__BAKED_TOKEN__' in source but replaced with real value at deploy time
-        if (BAKED_TOKEN && !BAKED_TOKEN.startsWith('__')) return BAKED_TOKEN;
-        return '';
+        return BAKED_TOKEN && !BAKED_TOKEN.startsWith('__') ? BAKED_TOKEN : '';
     }
 
     function getRepo() {
-        return localStorage.getItem(STORAGE_KEY_REPO) || DEFAULT_REPO;
+        return DEFAULT_REPO;
     }
 
     function getGhHeaders() {
@@ -109,23 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return headers;
     }
 
-    // Initialize Config Inputs
-    if (ghRepoInput) ghRepoInput.value = getRepo();
-    if (ghTokenInput) ghTokenInput.value = getToken();
-
     // --- Status Check ---
     async function checkStatus() {
-        const token = getToken();
-        const repo  = getRepo();
-
-        if (!token) {
-            runnerStatus.className = 'status-pill warning';
-            runnerStatus.querySelector('.label').textContent = '🔑 Connect GitHub Token';
-            return;
-        }
-
         try {
-            const repoRes = await fetch(`https://api.github.com/repos/${repo}`, {
+            const repoRes = await fetch(`https://api.github.com/repos/${getRepo()}`, {
                 headers: getGhHeaders()
             });
 
@@ -173,19 +144,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btnText.textContent = 'Sending to Cloud Runner...';
         formFeedback.className = 'feedback-msg hidden';
 
-        const token = getToken();
-        const repo  = getRepo();
-
-        if (!token) {
-            showToast('Please connect your GitHub Token first via GitHub Settings.', 'warning');
-            configModal.classList.remove('hidden');
-            submitBtn.disabled = false;
-            btnText.textContent = '⚡ Start Cloud Download';
-            return;
-        }
-
         try {
-            const dispatchRes = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+            const dispatchRes = await fetch(`https://api.github.com/repos/${getRepo()}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
                 method: 'POST',
                 headers: getGhHeaders(),
                 body: JSON.stringify({
@@ -456,44 +416,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Modal Events
     if (closeLogsBtn) closeLogsBtn.addEventListener('click', () => logsModal.classList.add('hidden'));
 
-    if (openConfigModalBtn) openConfigModalBtn.addEventListener('click', () => {
-        ghTokenInput.value = getToken();
-        ghRepoInput.value  = getRepo();
-        configModal.classList.remove('hidden');
-    });
-
-    if (closeConfigModalBtn) closeConfigModalBtn.addEventListener('click', () => configModal.classList.add('hidden'));
-
-    if (saveGhConfigBtn) {
-        saveGhConfigBtn.addEventListener('click', () => {
-            const token = ghTokenInput.value.trim();
-            const repo  = ghRepoInput.value.trim() || DEFAULT_REPO;
-
-            if (!token) {
-                showToast('Please enter a valid GitHub token.', 'warning');
-                return;
-            }
-
-            localStorage.setItem(STORAGE_KEY_TOKEN, token);
-            localStorage.setItem(STORAGE_KEY_REPO, repo);
-            showToast('✅ GitHub credentials saved to your browser!', 'success');
-            configModal.classList.add('hidden');
-            checkStatus();
-            loadJobs();
-        });
-    }
-
-    if (clearGhConfigBtn) {
-        clearGhConfigBtn.addEventListener('click', () => {
-            localStorage.removeItem(STORAGE_KEY_TOKEN);
-            if (ghTokenInput) ghTokenInput.value = '';
-            showToast('GitHub token disconnected and purged from this browser.', 'info');
-            configModal.classList.add('hidden');
-            checkStatus();
-            loadJobs();
-        });
-    }
-
     // Safe Event Delegation for Jobs List (Zero inline onclick / Zero DOM-XSS)
     if (jobsList) {
         jobsList.addEventListener('click', (e) => {
@@ -514,14 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (refreshJobsBtn) refreshJobsBtn.addEventListener('click', loadJobs);
 
-    // Initial Load & Auth prompt
+    // Initial Load
     checkStatus();
     loadJobs();
-
-    // Only prompt for token if neither localStorage nor the baked token is available
-    if (!getToken()) {
-        setTimeout(() => {
-            configModal.classList.remove('hidden');
-        }, 800);
-    }
 });
