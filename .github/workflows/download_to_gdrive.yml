@@ -1,0 +1,92 @@
+name: Cloud Torrent To Google Drive
+
+on:
+  workflow_dispatch:
+    inputs:
+      magnet_url:
+        description: 'Magnet URL or Torrent Link'
+        required: true
+        type: string
+      destination_folder:
+        description: 'Google Drive Destination Subfolder (inside /Torrents)'
+        required: false
+        default: 'General'
+        type: string
+
+jobs:
+  download-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free Disk Space on Runner
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - name: Install Aria2 & Rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y aria2 curl
+          sudo -v ; curl https://rclone.org/install.sh | sudo bash
+          rclone version
+          aria2c --version
+
+      - name: Configure Rclone (Google Drive)
+        env:
+          RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONFIG_BASE64 }}
+        run: |
+          if [ -z "$RCLONE_CONF_BASE64" ]; then
+            echo "ERROR: RCLONE_CONFIG_BASE64 secret is not configured!"
+            echo "Please run the Google Drive setup wizard on your dashboard or set the secret."
+            exit 1
+          fi
+          mkdir -p ~/.config/rclone
+          echo "$RCLONE_CONF_BASE64" | base64 --decode > ~/.config/rclone/rclone.conf
+          rclone listremotes
+
+      - name: Download Torrent via Aria2
+        id: aria2_download
+        run: |
+          mkdir -p ./downloads
+          echo "Starting aria2c download on high-speed cloud connection..."
+          
+          aria2c \
+            --allow-overwrite=true \
+            --auto-file-renaming=false \
+            --seed-time=0 \
+            --summary-interval=5 \
+            --max-connection-per-server=16 \
+            --bt-max-peers=120 \
+            --bt-tracker-connect-timeout=10 \
+            --bt-tracker-timeout=10 \
+            --dir="./downloads" \
+            "${{ inputs.magnet_url }}"
+            
+          echo "Download complete! Files downloaded:"
+          ls -la ./downloads
+
+      - name: Upload to Google Drive via Rclone
+        run: |
+          DEST_FOLDER="${{ inputs.destination_folder }}"
+          if [ -z "$DEST_FOLDER" ]; then
+            DEST_FOLDER="General"
+          fi
+          
+          echo "Streaming directly to Google Drive at: Torrents/$DEST_FOLDER"
+          rclone copy ./downloads "gdrive:Torrents/$DEST_FOLDER" \
+            --transfers=4 \
+            --drive-chunk-size=64M \
+            --stats=10s \
+            --stats-one-line \
+            -v
+            
+          echo "Transfer to Google Drive successfully completed!"
+
+      - name: Clean Up Scratch Files
+        if: always()
+        run: |
+          rm -rf ./downloads
+          rm -rf ~/.config/rclone/rclone.conf
+          echo "Cleaned up all temporary files."
