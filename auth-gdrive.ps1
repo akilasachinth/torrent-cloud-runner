@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Continue"
 $tools = "C:\projects\cloud-torrent-gdrive\tools"
 $rclone = Join-Path $tools "rclone.exe"
-$repo = "akilasachinth/torrent-cloud-runner"
+$repo = "akilasilv/torrent-cloud-runner"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "Google Drive Authorization Wizard for Cloud Torrent" -ForegroundColor Cyan

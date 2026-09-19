@@ -7,6 +7,6 @@
     "start": "node server.js"
   },
   "keywords": ["seedr", "torrent", "gdrive", "cloud-downloader"],
-  "author": "akilasachintha",
+  "author": "akilasilv",
   "license": "MIT"
 }

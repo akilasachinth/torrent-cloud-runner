@@ -4,7 +4,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const PORT = process.env.PORT || 5000;
-const REPO = process.env.REPO || 'akilasachinth/torrent-cloud-runner';
+const REPO = process.env.REPO || 'akilasilv/torrent-cloud-runner';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const TOOLS_DIR = path.join(__dirname, 'tools');
 const RCLONE_EXE = path.join(TOOLS_DIR, 'rclone.exe');
@@ -49,6 +49,7 @@ const MIME_TYPES = {
 };
 
 const ALLOWED_ORIGINS = new Set([
+    'https://akilasilv.github.io',
     'https://akilasachinth.github.io',
     `http://localhost:${PORT}`,
     `http://127.0.0.1:${PORT}`

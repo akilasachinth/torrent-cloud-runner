@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Storage Keys
     const STORAGE_KEY_TOKEN = 'cloudtorrent_gh_token';
     const STORAGE_KEY_REPO = 'cloudtorrent_gh_repo';
-    const DEFAULT_REPO = 'akilasachinth/torrent-cloud-runner';
+    const DEFAULT_REPO = 'akilasilv/torrent-cloud-runner';
 
     // Environment Detection
     const isLocalServer = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port === '5000';
