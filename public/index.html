@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.github.com http://localhost:5000 http://127.0.0.1:5000; img-src 'self' data: https:; object-src 'none'; base-uri 'self';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>CloudTorrent — High-Speed Cloud Downloader</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -192,7 +195,10 @@
                         <label for="ghRepoInput">Repository (Owner/Repo):</label>
                         <input type="text" id="ghRepoInput" value="akilasachinth/torrent-cloud-runner" placeholder="username/repository">
                     </div>
-                    <button id="saveGhConfigBtn" class="btn btn-primary btn-block">💾 Save & Connect</button>
+                    <div style="display: flex; gap: 10px; margin-top: 14px;">
+                        <button id="saveGhConfigBtn" class="btn btn-primary" style="flex: 2;">💾 Save & Connect</button>
+                        <button id="clearGhConfigBtn" class="btn btn-danger" style="flex: 1;" type="button" title="Purge token from browser storage">🗑️ Disconnect</button>
+                    </div>
                 </div>
             </div>
         </div>

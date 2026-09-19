@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ghTokenInput = document.getElementById('ghTokenInput');
     const ghRepoInput = document.getElementById('ghRepoInput');
     const saveGhConfigBtn = document.getElementById('saveGhConfigBtn');
+    const clearGhConfigBtn = document.getElementById('clearGhConfigBtn');
 
     let pollInterval = null;
     const directLinksCache = new Map();
@@ -392,6 +393,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Safe URL sanitizer (prevents javascript: and malformed URI injection)
+    function sanitizeUrl(url) {
+        if (!url || typeof url !== 'string') return '';
+        try {
+            const parsed = new URL(url.trim());
+            if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                return parsed.href;
+            }
+        } catch (_) {}
+        return '';
+    }
+
     // --- Render Job Cards ---
     function renderJobs(jobs) {
         const countBadge = document.getElementById('jobsCountBadge');
@@ -434,6 +447,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const createdDate = new Date(job.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const safeDirectUrl = sanitizeUrl(job.directUrl);
+            const safeJobId = escapeHtml(String(job.databaseId || ''));
 
             return `
                 <div class="job-card ${isRunning ? 'is-active' : ''}">
@@ -441,23 +456,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="job-title">${escapeHtml(job.displayTitle || 'Torrent Download Job')}</div>
                         <div class="job-meta">
                             <span>Started: ${createdDate}</span>
-                            <span>ID: #${job.databaseId}</span>
+                            <span>ID: #${safeJobId}</span>
                         </div>
                     </div>
                     <div class="job-status">
                         <span class="badge ${badgeClass}">${statusLabel}</span>
                     </div>
                     <div class="job-actions">
-                        ${job.directUrl ? `
-                            <button class="btn btn-success btn-sm" onclick="window.sendToIdm('${escapeHtml(job.directUrl)}')">⚡ Send to IDM</button>
-                            <a href="${job.directUrl}" target="_blank" class="btn btn-primary btn-sm">🚀 Browser</a>
-                            <button class="btn btn-outline btn-sm" onclick="window.copyLink('${escapeHtml(job.directUrl)}')">📋 Copy</button>
+                        ${safeDirectUrl ? `
+                            <button class="btn btn-success btn-sm" data-action="idm" data-url="${escapeHtml(safeDirectUrl)}">⚡ Send to IDM</button>
+                            <a href="${escapeHtml(safeDirectUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">🚀 Browser</a>
+                            <button class="btn btn-outline btn-sm" data-action="copy" data-url="${escapeHtml(safeDirectUrl)}">📋 Copy</button>
                         ` : ''}
                         ${(job.status === 'in_progress' || job.status === 'queued') ? `
-                            <button class="btn btn-danger btn-sm" onclick="window.cancelJob('${job.databaseId}')">⏹️ Cancel</button>
+                            <button class="btn btn-danger btn-sm" data-action="cancel" data-id="${safeJobId}">⏹️ Cancel</button>
                         ` : ''}
-                        <button class="btn btn-outline btn-sm" onclick="window.viewLogs('${job.databaseId}')">📜 Logs</button>
-                        ${job.conclusion === 'success' ? `<a href="https://drive.google.com/drive/my-drive" target="_blank" class="btn btn-secondary btn-sm">📁 Open Drive</a>` : ''}
+                        <button class="btn btn-outline btn-sm" data-action="logs" data-id="${safeJobId}">📜 Logs</button>
+                        ${job.conclusion === 'success' ? `<a href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">📁 Open Drive</a>` : ''}
                     </div>
                 </div>
             `;
@@ -614,6 +629,35 @@ document.addEventListener('DOMContentLoaded', () => {
             configModal.classList.add('hidden');
             checkStatus();
             loadJobs();
+        });
+    }
+
+    if (clearGhConfigBtn) {
+        clearGhConfigBtn.addEventListener('click', () => {
+            localStorage.removeItem(STORAGE_KEY_TOKEN);
+            if (ghTokenInput) ghTokenInput.value = '';
+            showToast('GitHub token disconnected and purged from this browser.', 'info');
+            configModal.classList.add('hidden');
+            checkStatus();
+            loadJobs();
+        });
+    }
+
+    // Safe Event Delegation for Jobs List (Zero inline onclick / Zero DOM-XSS)
+    if (jobsList) {
+        jobsList.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            if (action === 'idm' && btn.dataset.url) {
+                window.sendToIdm(btn.dataset.url);
+            } else if (action === 'copy' && btn.dataset.url) {
+                window.copyLink(btn.dataset.url);
+            } else if (action === 'cancel' && btn.dataset.id) {
+                window.cancelJob(btn.dataset.id);
+            } else if (action === 'logs' && btn.dataset.id) {
+                window.viewLogs(btn.dataset.id);
+            }
         });
     }
 

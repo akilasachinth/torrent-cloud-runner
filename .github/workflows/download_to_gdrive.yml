@@ -23,6 +23,9 @@ on:
         default: 'General'
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   download-and-distribute:
     runs-on: ubuntu-latest
@@ -83,7 +86,7 @@ jobs:
 
           if [ "$FILE_COUNT" -gt 1 ] || [ -d ./downloads/* ]; then
             echo "Packaging multi-file torrent into single archive..."
-            cd ./downloads && zip -r -0 ../TorrentBundle.zip ./* && cd ..
+            (cd ./downloads && zip -q -r -0 ../TorrentBundle.zip -- .)
             UPLOAD_FILE="TorrentBundle.zip"
           else
             SINGLE_FILE=$(ls -1 ./downloads | head -n 1)
@@ -92,30 +95,34 @@ jobs:
 
           echo "Target upload file: $UPLOAD_FILE"
           
-          # Upload to GoFile CDN
-          SERVER=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name // "store-eu-par-4"')
+          # Upload to GoFile CDN (sanitize server name)
+          SERVER=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name // "store-eu-par-4"' | tr -cd '[:alnum:]-')
+          if [ -z "$SERVER" ]; then
+            SERVER="store-eu-par-4"
+          fi
           echo "Uploading to GoFile server: $SERVER ..."
-          UPLOAD_RES=$(curl -s -F "file=@$UPLOAD_FILE" "https://${SERVER}.gofile.io/contents/uploadfile")
+          UPLOAD_RES=$(curl -s -F "file=@${UPLOAD_FILE}" "https://${SERVER}.gofile.io/contents/uploadfile")
           DIRECT_URL=$(echo "$UPLOAD_RES" | jq -r '.data.downloadPage // empty')
 
           # Fallback to Pixeldrain if GoFile did not return a link
           if [ -z "$DIRECT_URL" ] || [ "$DIRECT_URL" = "null" ]; then
             echo "GoFile upload was empty. Uploading to Pixeldrain CDN fallback..."
-            PIXEL_RES=$(curl -s -F "file=@$UPLOAD_FILE" https://pixeldrain.com/api/file)
-            PIXEL_ID=$(echo "$PIXEL_RES" | jq -r '.id // empty')
+            PIXEL_RES=$(curl -s -F "file=@${UPLOAD_FILE}" https://pixeldrain.com/api/file)
+            PIXEL_ID=$(echo "$PIXEL_RES" | jq -r '.id // empty' | tr -cd '[:alnum:]-')
             if [ -n "$PIXEL_ID" ]; then
               DIRECT_URL="https://pixeldrain.com/api/file/$PIXEL_ID?download"
             fi
           fi
 
-          if [ -n "$DIRECT_URL" ]; then
+          # Strictly validate DIRECT_URL format
+          if [[ "$DIRECT_URL" =~ ^https:\/\/[a-zA-Z0-9\.\-\_\/\?\=\&]+$ ]]; then
             echo "=========================================================="
             echo "DIRECT_DOWNLOAD_URL: $DIRECT_URL"
             echo "=========================================================="
             echo "### 🚀 High-Speed Direct Download Link:" >> $GITHUB_STEP_SUMMARY
             echo "[Click to Download / Stream ($DIRECT_URL)]($DIRECT_URL)" >> $GITHUB_STEP_SUMMARY
           else
-            echo "Notice: Could not generate public direct link."
+            echo "Notice: No valid direct link generated."
           fi
 
       - name: Upload to Google Drive (Optional)
@@ -154,6 +161,6 @@ jobs:
       - name: Clean Up Scratch Files
         if: always()
         run: |
+          shred -u ~/.config/rclone/rclone.conf 2>/dev/null || rm -f ~/.config/rclone/rclone.conf
           rm -rf ./downloads TorrentBundle.zip
-          rm -rf ~/.config/rclone/rclone.conf
-          echo "Cleaned up all temporary files."
+          echo "Cleaned up and securely purged all temporary files."
