@@ -52,6 +52,51 @@ document.addEventListener('DOMContentLoaded', () => {
         restartServerBtn.style.display = 'none';
     }
 
+    // --- Toast Notification System ---
+    function showToast(message, type = 'info', duration = 4000) {
+        const container = document.getElementById('toastContainer');
+        if (!container) {
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            return;
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        
+        let icon = 'ℹ️';
+        if (type === 'success') icon = '✅';
+        else if (type === 'error') icon = '❌';
+        else if (type === 'warning') icon = '⚠️';
+
+        const iconEl = document.createElement('span');
+        iconEl.className = 'toast-icon';
+        iconEl.textContent = icon;
+
+        const textEl = document.createElement('span');
+        textEl.className = 'toast-text';
+        textEl.textContent = message;
+
+        toast.appendChild(iconEl);
+        toast.appendChild(textEl);
+        container.appendChild(toast);
+
+        let removed = false;
+        const remove = () => {
+            if (removed) return;
+            removed = true;
+            toast.classList.add('toast-exit');
+            setTimeout(() => {
+                if (toast.parentNode) toast.parentNode.removeChild(toast);
+            }, 300);
+        };
+
+        const timer = setTimeout(remove, duration);
+        toast.addEventListener('click', () => {
+            clearTimeout(timer);
+            remove();
+        });
+    }
+
     // Helper functions for settings
     function getToken() {
         return localStorage.getItem(STORAGE_KEY_TOKEN) || '';
@@ -178,6 +223,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!magnet) return;
 
+        if (!magnet.startsWith('magnet:?') && !magnet.startsWith('http://') && !magnet.startsWith('https://')) {
+            showToast('Please enter a valid magnet:? link or torrent HTTP/HTTPS URL.', 'warning');
+            return;
+        }
+
         // UI state
         submitBtn.disabled = true;
         const btnText = submitBtn.querySelector('.btn-text');
@@ -200,15 +250,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.success) {
                     formFeedback.textContent = data.message;
                     formFeedback.className = 'feedback-msg success';
+                    showToast('Cloud download dispatched successfully!', 'success');
                     magnetInput.value = '';
                     setTimeout(loadJobs, 2500);
                 } else {
-                    formFeedback.textContent = data.error || 'Failed to dispatch download';
+                    const err = data.error || 'Failed to dispatch download';
+                    formFeedback.textContent = err;
                     formFeedback.className = 'feedback-msg error';
+                    showToast(err, 'error');
                 }
             } catch (err) {
                 formFeedback.textContent = 'Network error contacting local server.';
                 formFeedback.className = 'feedback-msg error';
+                showToast('Network error contacting server', 'error');
             } finally {
                 submitBtn.disabled = false;
                 btnText.textContent = '⚡ Start Cloud Download';
@@ -219,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const repo = getRepo();
 
             if (!token) {
-                alert('Please connect your GitHub Token first using the "🔑 GitHub Settings" button.');
+                showToast('Please connect your GitHub Token first via GitHub Settings.', 'warning');
                 configModal.classList.remove('hidden');
                 submitBtn.disabled = false;
                 btnText.textContent = '⚡ Start Cloud Download';
@@ -244,16 +298,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (dispatchRes.status === 204) {
                     formFeedback.textContent = '🚀 Job dispatched directly to GitHub Cloud Runner! Downloading in cloud...';
                     formFeedback.className = 'feedback-msg success';
+                    showToast('🚀 Dispatched directly to GitHub Cloud Runner!', 'success');
                     magnetInput.value = '';
                     setTimeout(loadJobs, 3000);
                 } else {
                     const errData = await dispatchRes.json().catch(() => ({}));
-                    formFeedback.textContent = errData.message || `GitHub dispatch failed (${dispatchRes.status})`;
+                    const errMsg = errData.message || `GitHub dispatch failed (${dispatchRes.status})`;
+                    formFeedback.textContent = errMsg;
                     formFeedback.className = 'feedback-msg error';
+                    showToast(errMsg, 'error');
                 }
             } catch (err) {
                 formFeedback.textContent = 'Failed to dispatch to GitHub API: ' + err.message;
                 formFeedback.className = 'feedback-msg error';
+                showToast('Failed to dispatch: ' + err.message, 'error');
             } finally {
                 submitBtn.disabled = false;
                 btnText.textContent = '⚡ Start Cloud Download';
@@ -336,11 +394,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Render Job Cards ---
     function renderJobs(jobs) {
+        const countBadge = document.getElementById('jobsCountBadge');
+        if (countBadge) {
+            countBadge.textContent = jobs ? jobs.length : 0;
+            countBadge.classList.toggle('hidden', !jobs || jobs.length === 0);
+        }
+
         if (!jobs || jobs.length === 0) {
             jobsList.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">☁️</div>
-                    <p>No downloads yet. Paste a magnet link above to start downloading on cloud runners!</p>
+                    <h4>No Downloads Yet</h4>
+                    <p>Paste a magnet link above to trigger a high-speed download on the cloud runner!</p>
                 </div>`;
             return;
         }
@@ -371,7 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const createdDate = new Date(job.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             return `
-                <div class="job-card">
+                <div class="job-card ${isRunning ? 'is-active' : ''}">
                     <div class="job-info">
                         <div class="job-title">${escapeHtml(job.displayTitle || 'Torrent Download Job')}</div>
                         <div class="job-meta">
@@ -416,10 +481,10 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' });
                 const data = await res.json();
-                alert(data.message || 'Job cancellation submitted.');
+                showToast(data.message || 'Job cancellation submitted.', 'info');
                 loadJobs();
             } catch (err) {
-                alert('Failed to cancel job: ' + err.message);
+                showToast('Failed to cancel job: ' + err.message, 'error');
             }
         } else {
             try {
@@ -428,13 +493,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: getGhHeaders()
                 });
                 if (res.status === 202) {
-                    alert('Cancellation request sent to cloud runner.');
+                    showToast('Cancellation request sent to cloud runner.', 'info');
                     loadJobs();
                 } else {
-                    alert('Cancel failed: ' + res.statusText);
+                    showToast('Cancel failed: ' + res.statusText, 'error');
                 }
             } catch (err) {
-                alert('Cancel request failed: ' + err.message);
+                showToast('Cancel request failed: ' + err.message, 'error');
             }
         }
     };
@@ -495,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ url })
                 });
                 const data = await res.json();
-                if (!data.success) alert('IDM Error: ' + data.error);
+                if (!data.success) showToast('IDM Error: ' + data.error, 'error');
             } catch (err) {
                 window.copyLink(url);
             }
@@ -508,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.copyLink = async (url) => {
         try {
             await navigator.clipboard.writeText(url);
-            alert('📋 High-Speed Direct Link copied to clipboard!\n\nIf IDM or browser extension is active, it will capture this download automatically.');
+            showToast('📋 Direct download link copied! IDM or browser extension will capture it automatically.', 'success');
         } catch (err) {
             prompt('Copy this high-speed direct download link:', url);
         }
@@ -539,16 +604,44 @@ document.addEventListener('DOMContentLoaded', () => {
             const repo = ghRepoInput.value.trim() || DEFAULT_REPO;
 
             if (!token) {
-                alert('Please enter a valid GitHub token.');
+                showToast('Please enter a valid GitHub token.', 'warning');
                 return;
             }
 
             localStorage.setItem(STORAGE_KEY_TOKEN, token);
             localStorage.setItem(STORAGE_KEY_REPO, repo);
-            alert('✅ GitHub credentials saved to your browser!');
+            showToast('✅ GitHub credentials saved to your browser!', 'success');
             configModal.classList.add('hidden');
             checkStatus();
             loadJobs();
+        });
+    }
+
+    // GDrive Config Modal Handlers
+    if (saveConfigBtn) {
+        saveConfigBtn.addEventListener('click', () => {
+            const conf = rcloneConfigInput ? rcloneConfigInput.value.trim() : '';
+            if (!conf) {
+                showToast('Please paste your Rclone configuration block first.', 'warning');
+                return;
+            }
+            try {
+                const b64 = btoa(conf);
+                navigator.clipboard.writeText(b64).catch(() => {});
+                showToast('✅ Encoded config copied! Paste into GitHub Secrets as RCLONE_CONFIG_BASE64.', 'success', 6000);
+            } catch (e) {
+                showToast('Failed to encode config: ' + e.message, 'error');
+            }
+        });
+    }
+
+    if (launchRcloneAuthBtn) {
+        launchRcloneAuthBtn.addEventListener('click', () => {
+            if (authOutput) {
+                authOutput.classList.remove('hidden');
+                authOutput.textContent = 'ℹ️ Note: Your Google Drive secret (RCLONE_CONFIG_BASE64) is already active in GitHub Secrets! If you wish to replace it, authorize using rclone on your local machine and paste the output into Option 2.';
+            }
+            showToast('Google Drive secret is already configured in GitHub Secrets.', 'info');
         });
     }
 

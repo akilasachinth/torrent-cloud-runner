@@ -45,9 +45,17 @@ jobs:
 
       - name: Download Torrent via Aria2
         id: aria2_download
+        env:
+          MAGNET_URL: ${{ inputs.magnet_url }}
         run: |
           mkdir -p ./downloads
           echo "Starting high-speed cloud torrent download..."
+          
+          # Validate input
+          if [[ ! "$MAGNET_URL" =~ ^(magnet:\?|https?:\/\/) ]]; then
+            echo "ERROR: Invalid magnet link or torrent URL provided."
+            exit 1
+          fi
           
           aria2c \
             --allow-overwrite=true \
@@ -59,7 +67,7 @@ jobs:
             --bt-tracker-connect-timeout=10 \
             --bt-tracker-timeout=10 \
             --dir="./downloads" \
-            "${{ inputs.magnet_url }}"
+            "$MAGNET_URL"
             
           echo "Download complete! Files downloaded:"
           ls -la ./downloads
@@ -114,6 +122,7 @@ jobs:
         if: ${{ inputs.upload_to_gdrive == 'true' || inputs.upload_to_gdrive == true }}
         env:
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONFIG_BASE64 }}
+          INPUT_DEST_FOLDER: ${{ inputs.destination_folder }}
         run: |
           if [ -z "$RCLONE_CONF_BASE64" ]; then
             echo "ERROR: RCLONE_CONFIG_BASE64 secret is missing in GitHub repository!"
@@ -124,7 +133,8 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONF_BASE64" | base64 --decode > ~/.config/rclone/rclone.conf
 
-          DEST_FOLDER="${{ inputs.destination_folder }}"
+          # Sanitize folder name
+          DEST_FOLDER=$(echo "${INPUT_DEST_FOLDER:-General}" | tr -cd '[:alnum:] _-')
           if [ -z "$DEST_FOLDER" ]; then
             DEST_FOLDER="General"
           fi
