@@ -151,8 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     ref: 'main',
                     inputs: {
-                        magnet_url: magnet,
-                        upload_to_direct: directLinkCheckbox && directLinkCheckbox.checked ? 'true' : 'false'
+                        magnet_url: magnet
                     }
                 })
             });
