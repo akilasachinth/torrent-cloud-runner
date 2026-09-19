@@ -1,5 +1,7 @@
 # ⚡ CloudTorrent ➔ Google Drive & High-Speed Direct CDN
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/akilasachinth/torrent-cloud-runner/blob/main/torrent_cloud_downloader.ipynb)
+
 A private, high-performance cloud torrent platform (similar to Seedr / Real-Debrid) that downloads torrents directly on remote cloud infrastructure with **zero local network bandwidth usage**.
 
 Once downloaded remotely in the cloud, files are uploaded to:
