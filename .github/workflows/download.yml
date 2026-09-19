@@ -67,21 +67,23 @@ jobs:
           fi
 
           # Determine the real torrent name (top-level entry in downloads/)
-          TORRENT_NAME=$(ls -1 ./downloads | head -n 1)
-          # Sanitize: keep alphanumeric, dots, hyphens, underscores, spaces
-          TORRENT_NAME=$(echo "$TORRENT_NAME" | tr -cd '[:alnum:]._-\n ')
+          RAW_NAME=$(ls -1 ./downloads | head -n 1)
+          # Sanitize: keep alphanumeric, dots, spaces, underscores, hyphens (- placed at the end to prevent invalid range)
+          SAFE_NAME=$(echo "$RAW_NAME" | tr -cd '[:alnum:]. _-')
           # Fallback if name is empty after sanitize
-          if [ -z "$TORRENT_NAME" ]; then
-            TORRENT_NAME="download"
+          if [ -z "$SAFE_NAME" ]; then
+            SAFE_NAME="download"
           fi
 
-          if [ "$FILE_COUNT" -gt 1 ] || [ -d "./downloads/$TORRENT_NAME" ]; then
+          if [ "$FILE_COUNT" -gt 1 ] || [ -d "./downloads/$RAW_NAME" ]; then
             echo "Packaging multi-file torrent into single archive..."
-            ZIP_NAME="${TORRENT_NAME}.zip"
+            ZIP_NAME="${SAFE_NAME}.zip"
             (cd ./downloads && zip -q -r -0 "../${ZIP_NAME}" -- .)
             UPLOAD_FILE="${ZIP_NAME}"
+            TORRENT_NAME="${ZIP_NAME}"
           else
-            UPLOAD_FILE="./downloads/${TORRENT_NAME}"
+            UPLOAD_FILE="./downloads/${RAW_NAME}"
+            TORRENT_NAME="${RAW_NAME}"
           fi
 
           echo "Torrent name: $TORRENT_NAME"
