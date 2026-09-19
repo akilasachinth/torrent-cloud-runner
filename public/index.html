@@ -29,6 +29,7 @@
                     <span class="dot"></span>
                     <span class="label">Checking GDrive...</span>
                 </div>
+                <button id="openConfigModalBtn" class="btn btn-outline btn-sm">🔑 GitHub Settings</button>
                 <button id="openGdriveModalBtn" class="btn btn-outline btn-sm">⚙️ GDrive Config</button>
                 <button id="restartServerBtn" class="btn btn-outline btn-sm" title="Restart Background Server">🔄 Restart</button>
             </div>
@@ -130,6 +131,31 @@
                 </div>
                 <div class="modal-body">
                     <pre id="logsContent" class="logs-console">Loading cloud logs...</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- GitHub Config Modal (For Cloud / GitHub Pages Mode) -->
+        <div id="configModal" class="modal-backdrop hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>🔑 GitHub Cloud Connection</h3>
+                    <button id="closeConfigModalBtn" class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-desc">
+                        Connect this web app to your GitHub Cloud Runner. Your token is stored <strong>only in this browser's private storage</strong>.
+                    </p>
+                    <div class="input-group" style="margin-bottom: 1rem;">
+                        <label style="display:block; margin-bottom: 0.5rem; font-weight: 600;">GitHub Personal Access Token (PAT):</label>
+                        <input type="password" id="ghTokenInput" placeholder="ghp_... or gho_..." style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color, #333); background: #161b22; color: #fff;">
+                        <small style="color: #8b949e; display: block; margin-top: 0.35rem;">Needs <code>repo</code> or <code>workflow</code> permission.</small>
+                    </div>
+                    <div class="input-group" style="margin-bottom: 1.5rem;">
+                        <label style="display:block; margin-bottom: 0.5rem; font-weight: 600;">Repository:</label>
+                        <input type="text" id="ghRepoInput" value="akilasachinth/torrent-cloud-runner" placeholder="username/repository" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color, #333); background: #161b22; color: #fff;">
+                    </div>
+                    <button id="saveGhConfigBtn" class="btn btn-primary btn-block">💾 Save & Connect</button>
                 </div>
             </div>
         </div>
