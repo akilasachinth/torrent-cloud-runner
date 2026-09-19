@@ -96,7 +96,7 @@ jobs:
             PIXEL_RES=$(curl -s -F "file=@$UPLOAD_FILE" https://pixeldrain.com/api/file)
             PIXEL_ID=$(echo "$PIXEL_RES" | jq -r '.id // empty')
             if [ -n "$PIXEL_ID" ]; then
-              DIRECT_URL="https://pixeldrain.com/u/$PIXEL_ID"
+              DIRECT_URL="https://pixeldrain.com/api/file/$PIXEL_ID?download"
             fi
           fi
 
